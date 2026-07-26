@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Minamo runtime data (object data + metadata store)
+data/
+metadata/
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
