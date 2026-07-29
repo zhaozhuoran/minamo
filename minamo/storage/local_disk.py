@@ -78,6 +78,14 @@ class LocalDiskBackend(StorageBackend):
         data = await asyncio.to_thread(path.read_bytes)
         yield data
 
+    async def read_range(self, bucket: str, key: str, start: int, end: int) -> bytes:
+        def _read() -> bytes:
+            with self._object_path(bucket, key).open("rb") as fh:
+                fh.seek(start)
+                return fh.read(end - start + 1)
+
+        return await asyncio.to_thread(_read)
+
     async def delete_object(self, bucket: str, key: str) -> None:
         def _delete() -> None:
             path = self._object_path(bucket, key)

@@ -18,7 +18,7 @@ import uvicorn
 from botocore.config import Config
 
 from minamo.app import create_app
-from minamo.config import Settings
+from minamo.config import ConfigManager
 
 ACCESS_KEY = "minamo"
 SECRET_KEY = "minamo-secret"
@@ -38,17 +38,20 @@ def _free_port() -> int:
 @pytest.fixture(scope="session")
 def server():
     tmp = Path(tempfile.mkdtemp(prefix="minamo-test-"))
-    settings = Settings(
-        data_root=tmp / "data",
-        metadata_root=tmp / "metadata",
-        access_key=ACCESS_KEY,
-        secret_key=SECRET_KEY,
-        region=REGION,
-        endpoint_host="localhost",
-        enforce_signature=True,
-        backend="local_disk",
+    config = ConfigManager.from_dict(
+        {
+            "app": {
+                "backend": "local_disk",
+                "endpoint_host": "localhost",
+                "region": REGION,
+                "enforce_signature": True,
+                "data": {"root": str(tmp / "data")},
+            },
+            "secrets": {"access_key": ACCESS_KEY, "secret_key": SECRET_KEY},
+            "storage_localdisk": {"root": str(tmp / "data" / "localdisk")},
+        }
     )
-    app = create_app(settings)
+    app = create_app(config)
     port = _free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
     srv = uvicorn.Server(config)

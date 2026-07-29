@@ -1,0 +1,25 @@
+# Minamo service configuration.
+# See docs/configuration.md for the full reference.
+
+# Active storage backend. The bundled backend is "local_disk".
+backend = "local_disk"
+
+# Host clients connect to; used to detect virtual-hosted bucket names.
+endpoint_host = "localhost"
+
+# SigV4 region.
+region = "us-east-1"
+
+# Verify request signatures. Keep true in production.
+enforce_signature = true
+
+# Default presigned URL expiry, in seconds.
+presign_ttl = 3600
+
+# Runtime data layout (object data, metadata, cache, program state).
+# All paths are relative to the working directory unless absolute.
+[data]
+root = "data"
+metadata_dir = "metadata"
+cache_dir = "cache"
+state_dir = "state"

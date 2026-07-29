@@ -64,6 +64,29 @@ def _user_metadata(headers: dict[str, str]) -> dict[str, str]:
     return meta
 
 
+def _parse_range(header: str) -> tuple[int, int] | None:
+    """Parse a single-range HTTP Range header.
+
+    Supports ``bytes=START-END``, ``bytes=START-`` and ``bytes=-N`` (suffix).
+    Multi-range requests fall back to ``None`` (caller serves the full object).
+    """
+    import re
+
+    if "," in header:
+        return None
+    m = re.match(r"\s*bytes=(\d*)-(\d*)\s*$", header)
+    if not m:
+        return None
+    start_str, end_str = m.group(1), m.group(2)
+    if start_str == "" and end_str == "":
+        return None
+    if start_str == "":
+        return (-int(end_str), None)  # suffix range; resolve against size later
+    start = int(start_str)
+    end = int(end_str) if end_str != "" else None
+    return (start, end)
+
+
 def _parse_complete_body(body: bytes) -> List[Tuple[int, str]]:
     root = ET.fromstring(body)
     # Strip the S3 XML namespace so local tag names match regardless of xmlns.
@@ -183,13 +206,28 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
                 bucket, key, q.get("uploadId"), parts, max_parts, marker
             )
             return Response(body, media_type="application/xml")
+        range_header = request.headers.get("range")
+        if range_header:
+            parsed = _parse_range(range_header)
+            if parsed is not None:
+                start, end = parsed
+                info, data = await service.get_object_range(bucket, key, start, end)
+                headers = _object_headers(info)
+                headers["Content-Range"] = f"bytes {start}-{end}/{info.size}"
+                headers["Content-Length"] = str(len(data))
+                headers["Accept-Ranges"] = "bytes"
+                return Response(content=data, status_code=206, headers=headers)
         info, stream = await service.get_object(bucket, key)
         data = b"".join([chunk async for chunk in stream])
-        return Response(content=data, headers=_object_headers(info))
+        headers = _object_headers(info)
+        headers["Accept-Ranges"] = "bytes"
+        return Response(content=data, headers=headers)
 
     if method == "HEAD":
         info = await service.head_object(bucket, key)
-        return Response(status_code=200, headers=_object_headers(info))
+        headers = _object_headers(info)
+        headers["Accept-Ranges"] = "bytes"
+        return Response(status_code=200, headers=headers)
 
     if method == "DELETE":
         if q.get("uploadId"):

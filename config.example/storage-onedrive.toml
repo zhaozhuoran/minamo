@@ -1,0 +1,6 @@
+# OneDrive backend configuration (future).
+# Static, operator-authored values live here. Auto-refreshed tokens
+# (access_token / refresh_token) are written by Minamo to data/state/onedrive.json.
+client_id = ""
+client_secret = ""
+state_file = "data/state/onedrive.json"

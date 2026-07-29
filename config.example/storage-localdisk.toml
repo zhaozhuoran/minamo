@@ -1,0 +1,3 @@
+# Local Disk backend configuration.
+# Root directory for object data. Relative paths resolve under data.root.
+root = "data/localdisk"

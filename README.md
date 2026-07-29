@@ -1,125 +1,85 @@
 # Minamo
 
-> A lightweight **S3-compatible storage gateway** with intelligent multi-tier storage.
+A lightweight, modern, **S3-compatible storage gateway**.
 
-Minamo provides a standard **Amazon S3-compatible API** while abstracting storage providers behind a clean, pluggable architecture. Applications interact with a single S3 endpoint without needing to know where objects are physically stored.
+Minamo presents a unified S3-compatible interface while abstracting storage
+providers behind a clean, pluggable backend interface. Clients never know
+where data is actually stored — they just talk S3.
 
-## Why Minamo?
+## Architecture
 
-Many applications store large numbers of user-uploaded files.
-
-In practice, most objects are accessed frequently only during the first few days after upload before becoming "cold" data. These objects still need to be retained, but keeping everything on expensive hot storage unnecessarily increases operating costs.
-
-Minamo aims to solve this problem by providing a transparent storage gateway that can eventually:
-
-- Keep hot data on high-performance storage
-- Automatically cache frequently accessed objects
-- Move cold data to low-cost storage
-- Remain fully compatible with existing S3 clients
-
-Applications continue using the standard S3 API without any storage-specific logic.
-
-# Architecture
-
-Minamo follows a strictly layered architecture.
+Minamo is strictly layered. HTTP handlers never touch the filesystem.
 
 ```
-HTTP / S3 API
-(FastAPI, SigV4 verification, XML responses)
-                │
-                ▼
-S3 Service
-(bucket/object orchestration, error mapping)
-                │
-                ▼
-Metadata
-(provider-independent SQLite metadata)
-                │
-                ▼
-Storage Backend Interface
-(pluggable abstraction)
+HTTP / S3 API   (FastAPI routers, SigV4 verification, XML responses)
+      │
+S3 Service       (bucket/object/multipart orchestration, error mapping)
+      │
+Metadata         (bucket/object/upload bookkeeping — SQLite, provider-independent)
+      │
+Storage Backend  (pluggable interface)
+      │
+Local Disk       (the bundled backend)
 ```
 
-Each layer has a single responsibility. HTTP handlers never access storage directly, and storage providers are completely isolated from the S3 API implementation.
+The backend is selected through a single configuration value, and new storage
+providers can be added by implementing one interface — without touching the API
+or service layers. The bundled backend stores objects on the local filesystem.
 
-# Current Features
+## Features
 
-- PutObject
-- GetObject
-- DeleteObject
-- HeadObject
-- ListObjectsV2
-  - prefix
-  - delimiter
-  - pagination
-- Bucket operations
-  - CreateBucket
-  - DeleteBucket
-  - HeadBucket
-  - ListBuckets
-- Multipart Upload
-  - CreateMultipartUpload
-  - UploadPart
-  - ListParts
-  - CompleteMultipartUpload
-  - AbortMultipartUpload
-- Presigned URLs
-- AWS Signature Version 4
-  - Header authentication
-  - Query authentication
-  - AWS-chunked streaming
+* **Objects**
+  * `PutObject` / `GetObject` / `DeleteObject` / `HeadObject`
+  * HTTP `Range` downloads (partial content, `206`) for large-file clients such
+    as rclone and the AWS CLI
+* **Listing**
+  * `ListObjectsV2` with `prefix`, `delimiter` and pagination
+    (`continuation-token`, `start-after`, `max-keys`)
+* **Buckets**
+  * `CreateBucket` / `DeleteBucket` / `HeadBucket` / `ListBuckets`
+  * `DeleteBucket` refuses to delete a non-empty bucket
+* **Multipart upload**
+  * `CreateMultipartUpload`, `UploadPart`, `ListParts`,
+    `CompleteMultipartUpload`, `AbortMultipartUpload`
+* **Presigned URLs**
+  * Query-string / SigV4 presigned URLs for time-limited, auth-free access
+* **Authentication**
+  * AWS Signature Version 4 (header + query), including AWS-chunked streaming
+* **Compatibility**
+  * Works with standard S3 SDKs and tools: boto3, AWS CLI, rclone, Cyberduck, ...
 
-# Roadmap
-
-## Phase 1
-
-- [x] Layered architecture
-- [x] Local Disk backend
-- [x] SigV4 authentication
-- [x] Multipart Upload
-- [x] Presigned URLs
-- [ ] Complete compatibility testing
-- [ ] Production hardening
-
-## Phase 2
-
-- [ ] Multi-storage routing
-- [ ] Automatic object migration
-- [ ] Background workers
-- [ ] Storage policies
-
-## Phase 3
-
-- [ ] Local cache
-- [ ] OneDrive backend
-- [ ] Cloudflare R2 backend
-- [ ] Generic S3 backend
-- [ ] Storage analytics
-- [ ] Lifecycle management
-
-# Running
+## Running
 
 ```bash
 pip install -e ".[test]"
-python -m minamo
-
-# or
-
-uvicorn minamo.app:app --port 8000
+python -m minamo                 # scaffolds config/ on first run, then serves on :8000
+python -m minamo init            # only create config/, then exit
+# or: uvicorn minamo.app:app --port 8000   (uses defaults if config/ is absent)
 ```
 
-Configuration is provided through `MINAMO_*` environment variables.
+### Configuration
 
-| Variable                   | Default         | Description                   |
-| -------------------------- | --------------- | ----------------------------- |
-| `MINAMO_DATA_ROOT`         | `./data`        | Object storage root           |
-| `MINAMO_METADATA_ROOT`     | `./metadata`    | SQLite metadata               |
-| `MINAMO_BACKEND`           | `local_disk`    | Active backend                |
-| `MINAMO_ENDPOINT_HOST`     | `localhost`     | Virtual-host bucket detection |
-| `MINAMO_ACCESS_KEY`        | `minamo`        | Access key                    |
-| `MINAMO_SECRET_KEY`        | `minamo-secret` | Secret key                    |
-| `MINAMO_REGION`            | `us-east-1`     | AWS region                    |
-| `MINAMO_ENFORCE_SIGNATURE` | `true`          | Enable SigV4 verification     |
+Minamo is configured through operator-authored TOML files under `config/`
+(gitignored). On first run, if `config/` is missing, Minamo scaffolds it from
+`config.example/` and **exits** so you set real values first. See
+[`docs/configuration.md`](docs/configuration.md) for the full per-key reference.
+
+Load precedence is **CLI > `MINAMO_*` env vars > `config/*.toml`**.
+
+```
+config/  app.toml · secrets.toml · storage-localdisk.toml · storage-onedrive.toml
+data/    localdisk/ · metadata/ · cache/ · state/   (state = program-maintained)
+```
+
+| Variable (env override) | File key | Default | Description |
+|-------------------------|----------|---------|-------------|
+| `MINAMO_BACKEND` | `app.backend` | `local_disk` | Active storage backend |
+| `MINAMO_ENDPOINT_HOST` | `app.endpoint_host` | `localhost` | Used to detect virtual-hosted bucket names |
+| `MINAMO_REGION` | `app.region` | `us-east-1` | SigV4 region |
+| `MINAMO_ENFORCE_SIGNATURE` | `app.enforce_signature` | `true` | Verify request signatures |
+| `MINAMO_PRESIGN_TTL` | `app.presign_ttl` | `3600` | Default presigned URL expiry (seconds) |
+| `MINAMO_ACCESS_KEY` / `MINAMO_SECRET_KEY` | `secrets.access_key` / `secrets.secret_key` | `minamo` / `minamo-secret` | SigV4 credentials |
+| `MINAMO_DATA_ROOT` | `app.data.root` | `data` | Runtime data root (holds localdisk/metadata/cache/state) |
 
 # Example
 

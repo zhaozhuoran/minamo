@@ -7,7 +7,7 @@ by Minamo's own helper.
 from __future__ import annotations
 
 from minamo.api.presign import build_presigned_url
-from minamo.config import Settings
+from minamo.config import ConfigManager
 
 
 def test_boto3_presigned_get(s3, raw):
@@ -29,9 +29,12 @@ def test_minamo_generated_presigned_get(s3, raw, server):
     s3.create_bucket(Bucket=b)
     s3.put_object(Bucket=b, Key="k.txt", Body=b"payload")
 
-    settings = Settings(
-        access_key="minamo", secret_key="minamo-secret", region="us-east-1"
-    )
+    settings = ConfigManager.from_dict(
+        {
+            "app": {"region": "us-east-1"},
+            "secrets": {"access_key": "minamo", "secret_key": "minamo-secret"},
+        }
+    ).settings
     url = build_presigned_url(server, settings, b, "k.txt", expires=300, method="GET")
     resp = raw.get(url)
     assert resp.status_code == 200

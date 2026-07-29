@@ -14,13 +14,23 @@ coverage/
 .venv/
 venv/
 env/
+.env/
+.env
 
-# Minamo runtime data (object data + metadata store)
-data/
-metadata/
+# Minamo operator config (secrets + machine-specific). The package source is
+# `minamo/config/` — the leading slash anchors this rule to the repo root only.
+/config/
+
+# Minamo runtime data (object data + metadata store + cache + program state)
+/data/
+/metadata/
 *.db
 *.sqlite
 *.sqlite3
+
+# Reference repositories / official docs (study material, not Minamo source)
+ref/
+docs/
 
 # Editor / OS
 .idea/

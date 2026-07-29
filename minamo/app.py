@@ -14,28 +14,32 @@ from fastapi import FastAPI, Request, Response
 from .api.presign import presign_router
 from .api.responses import error_xml
 from .api.router import router
-from .config import Settings, get_settings
+from .config import ConfigManager
 from .metadata.store import MetadataStore
 from .service.errors import S3Error
 from .service.s3_service import S3Service
+from .state import StateManager
 from .storage.factory import create_backend
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or get_settings()
-    settings.ensure_dirs()
+def create_app(config: ConfigManager | None = None) -> FastAPI:
+    config = config or ConfigManager()
+    config.ensure_dirs()
 
-    metadata = MetadataStore(settings.metadata_root / "metadata.db")
+    metadata = MetadataStore(config.settings.metadata_dir / "metadata.db")
     metadata.init()
-    backend = create_backend(settings.backend, settings.data_root)
+    state = StateManager(config.settings.state_dir)
+    backend = create_backend(config.settings.backend, config, state)
     service = S3Service(metadata, backend)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.settings = settings
+        app.state.settings = config.settings
+        app.state.config = config
         app.state.metadata = metadata
         app.state.service = service
         app.state.backend = backend
+        app.state.state = state
         yield
 
     app = FastAPI(title="Minamo", version="0.1.0", lifespan=lifespan)

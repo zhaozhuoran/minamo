@@ -37,6 +37,9 @@ class StorageBackend(ABC):
     async def get_object(self, bucket: str, key: str) -> AsyncIterator[bytes]: ...
 
     @abstractmethod
+    async def read_range(self, bucket: str, key: str, start: int, end: int) -> bytes: ...
+
+    @abstractmethod
     async def delete_object(self, bucket: str, key: str) -> None: ...
 
     @abstractmethod

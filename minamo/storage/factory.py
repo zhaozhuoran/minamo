@@ -3,13 +3,15 @@ keeps the choice centralised so new providers slot in without touching callers.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from .backend import StorageBackend
 from .local_disk import LocalDiskBackend
+from ..config import ConfigManager
+from ..state import StateManager
 
 
-def create_backend(name: str, data_root: Path) -> StorageBackend:
+def create_backend(
+    name: str, config: ConfigManager, state: StateManager
+) -> StorageBackend:
     if name == "local_disk":
-        return LocalDiskBackend(data_root)
+        return LocalDiskBackend(config.settings.localdisk_root)
     raise ValueError(f"Unknown storage backend: {name}")

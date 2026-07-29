@@ -78,6 +78,14 @@ def invalid_part_order() -> S3Error:
     )
 
 
+def invalid_range() -> S3Error:
+    return S3Error(
+        "InvalidRange",
+        "The requested range is not satisfiable.",
+        416,
+    )
+
+
 def access_denied() -> S3Error:
     return S3Error("AccessDenied", "Access Denied.", 403)
 

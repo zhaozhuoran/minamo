@@ -28,6 +28,7 @@ from .errors import (
     invalid_argument,
     invalid_part,
     invalid_part_order,
+    invalid_range,
     no_such_bucket,
     no_such_key,
     no_such_upload,
@@ -108,6 +109,23 @@ class S3Service:
         if info is None:
             raise no_such_key(key, bucket)
         return info
+
+    async def get_object_range(
+        self, bucket: str, key: str, start: int, end: int | None
+    ) -> Tuple[ObjectInfo, bytes]:
+        info = await self.head_object(bucket, key)
+        size = info.size
+        # Negative start means a suffix range: "last N bytes".
+        if start < 0:
+            start = size + start
+        if start < 0 or start >= size:
+            raise invalid_range()
+        if end is None or end >= size:
+            end = size - 1
+        if end < start:
+            raise invalid_range()
+        data = await self.storage.read_range(bucket, key, start, end)
+        return info, data
 
     async def delete_object(self, bucket: str, key: str) -> None:
         if not self.metadata.bucket_exists(bucket):
