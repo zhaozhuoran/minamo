@@ -21,7 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     import tomli as tomllib  # type: ignore
 
 from .scaffold import scaffold_config
-from .schema import AppConfig, SecretsConfig, Settings
+from .schema import AppConfig, SecretsConfig, Settings, HsmConfig
 
 DEFAULT_CONFIG_DIR = Path("config")
 
@@ -132,6 +132,7 @@ class ConfigManager:
     def _build_settings(self, raw: dict) -> Settings:
         app_cfg = AppConfig.model_validate(raw.get("app", {}))
         secrets_cfg = SecretsConfig.model_validate(raw.get("secrets", {}))
+        hsm_cfg = HsmConfig.model_validate(raw.get("hsm", {}))
         data_root = Path(app_cfg.data.root).resolve()
         backend = app_cfg.backend
         backend_raw = raw.get(f"storage_{backend}", {})
@@ -150,6 +151,7 @@ class ConfigManager:
             cache_dir=data_root / app_cfg.data.cache_dir,
             state_dir=data_root / app_cfg.data.state_dir,
             config_dir=self.config_dir,
+            hsm=hsm_cfg,
         )
 
     @staticmethod

@@ -29,6 +29,9 @@ class ObjectInfo:
     content_encoding: Optional[str] = None
     expires: Optional[str] = None
     metadata: Dict[str, str] = field(default_factory=dict)
+    current_tier: str = "tier0"
+    migration_state: str = "idle"
+    heat_score: float = 100.0
 
 
 @dataclass

@@ -11,7 +11,7 @@ Load precedence is **CLI > ENV > CONFIG (file)**. Environment variables use the
 from __future__ import annotations
 
 from pathlib import Path
-
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -43,6 +43,22 @@ class SecretsConfig(BaseModel):
     secret_key: str = "minamo-secret"
 
 
+class HsmTier(BaseModel):
+    id: str
+    backend: str
+    priority: int
+    target_capacity: int = 0
+    high_watermark: int = 0
+    limit: int = 0
+    minimum_residency: int = 0
+
+
+class HsmConfig(BaseModel):
+    enabled: bool = False
+    overflow_policy: str = "reject"  # reject or fallback
+    tiers: List[HsmTier] = []
+
+
 class Settings(BaseModel):
     """Fully resolved, validated runtime configuration.
 
@@ -64,3 +80,5 @@ class Settings(BaseModel):
     cache_dir: Path
     state_dir: Path
     config_dir: Path
+
+    hsm: HsmConfig = HsmConfig()

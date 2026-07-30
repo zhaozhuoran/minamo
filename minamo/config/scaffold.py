@@ -61,11 +61,43 @@ client_secret = ""
 state_file = "data/state/onedrive.json"
 """
 
+STORAGE_R2_TOML = """\
+# Cloudflare R2 backend configuration.
+endpoint_url = "http://localhost:8010"
+access_key_id = "test-access-key"
+secret_access_key = "test-secret-key"
+bucket = "minamo-r2"
+region_name = "auto"
+"""
+
+HSM_TOML = """\
+# HSM Multi-Tier Config
+enabled = true
+overflow_policy = "fallback"  # Options: "reject", "fallback"
+
+[[tiers]]
+id = "tier0"
+backend = "local_disk"
+priority = 0
+target_capacity = 1000000000  # 1 GB
+high_watermark = 1500000000   # 1.5 GB
+limit = 2000000000            # 2 GB
+minimum_residency = 60        # 60s for testing
+
+[[tiers]]
+id = "tier1"
+backend = "r2"
+priority = 1
+minimum_residency = 0
+"""
+
 DEFAULT_FILES: dict[str, str] = {
     "app.toml": APP_TOML,
     "secrets.toml": SECRETS_TOML,
     "storage-localdisk.toml": STORAGE_LOCALDISK_TOML,
     "storage-onedrive.toml": STORAGE_ONEDRIVE_TOML,
+    "storage-r2.toml": STORAGE_R2_TOML,
+    "hsm.toml": HSM_TOML,
 }
 
 

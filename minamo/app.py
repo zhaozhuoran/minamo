@@ -29,7 +29,19 @@ def create_app(config: ConfigManager | None = None) -> FastAPI:
     metadata = MetadataStore(config.settings.metadata_dir / "metadata.db")
     metadata.init()
     state = StateManager(config.settings.state_dir)
-    backend = create_backend(config.settings.backend, config, state)
+
+    scheduler = None
+    if config.settings.hsm.enabled:
+        from .storage.manager import StorageManager
+        from .storage.scheduler import HsmScheduler
+        backend = StorageManager(config, state, metadata)
+        # Check environment variable for shorter polling interval during testing
+        import os
+        interval = float(os.getenv("MINAMO_SCHEDULER_INTERVAL", "600.0"))
+        scheduler = HsmScheduler(config, metadata, backend, interval_seconds=interval)
+    else:
+        backend = create_backend(config.settings.backend, config, state)
+
     service = S3Service(metadata, backend)
 
     @asynccontextmanager
@@ -40,7 +52,15 @@ def create_app(config: ConfigManager | None = None) -> FastAPI:
         app.state.service = service
         app.state.backend = backend
         app.state.state = state
+        app.state.scheduler = scheduler
+
+        if scheduler:
+            scheduler.start()
+
         yield
+
+        if scheduler:
+            await scheduler.stop()
 
     app = FastAPI(title="Minamo", version="0.1.0", lifespan=lifespan)
     app.include_router(router)

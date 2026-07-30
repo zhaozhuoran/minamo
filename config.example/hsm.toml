@@ -1,0 +1,18 @@
+# HSM Multi-Tier Config
+enabled = true
+overflow_policy = "fallback"  # Options: "reject", "fallback"
+
+[[tiers]]
+id = "tier0"
+backend = "local_disk"
+priority = 0
+target_capacity = 1000000000  # 1 GB
+high_watermark = 1500000000   # 1.5 GB
+limit = 2000000000            # 2 GB
+minimum_residency = 60        # 60s for testing
+
+[[tiers]]
+id = "tier1"
+backend = "r2"
+priority = 1
+minimum_residency = 0
