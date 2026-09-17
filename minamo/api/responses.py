@@ -5,9 +5,8 @@ these in one place guarantees the wire format matches AWS references.
 """
 from __future__ import annotations
 
-from xml.sax.saxutils import escape
 
-from ..metadata.models import ListObjectsResult, ObjectInfo, PartInfo, UploadInfo
+from ..metadata.models import ListObjectsResult, PartInfo, UploadInfo
 from ..utils.time import http_date
 from ..utils.xml import element
 

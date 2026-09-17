@@ -98,7 +98,7 @@ async def s3_auth(request: Request) -> AuthResult:
                     400,
                 )
         # future: enforce ctx.access_key against an IAM store -> access_denied()
-        _ = access_denied
+        pass
     else:
         if is_streaming:
             body = parse_chunked_body(body)

@@ -97,7 +97,33 @@ class ConfigManager:
             self._apply_overrides(raw, overrides)
 
         self._raw = raw
+        self._build_backend_configs(raw)
         self.settings = self._build_settings(raw)
+
+    def _build_backend_configs(self, raw: dict) -> None:
+        self.backend_configs: dict[str, dict] = {}
+        for key, content in raw.items():
+            if not isinstance(content, dict):
+                continue
+            b_type = content.get("type")
+            b_id = content.get("id")
+
+            if b_type is not None:
+                b_id = b_id or key.replace("storage_", "")
+                self.backend_configs[b_id] = {
+                    "type": b_type,
+                    "id": b_id,
+                    **content
+                }
+            elif key.startswith("storage_"):
+                legacy_type = key[8:]
+                if legacy_type == "localdisk":
+                    legacy_type = "local_disk"
+                self.backend_configs[legacy_type] = {
+                    "type": legacy_type,
+                    "id": legacy_type,
+                    **content
+                }
 
     # -- construction helpers ------------------------------------------------
     @classmethod
@@ -111,6 +137,7 @@ class ConfigManager:
         raw = deepcopy(raw)
         self._apply_env(raw)
         self._raw = raw
+        self._build_backend_configs(raw)
         self.settings = self._build_settings(raw)
         return self
 
@@ -135,7 +162,7 @@ class ConfigManager:
         hsm_cfg = HsmConfig.model_validate(raw.get("hsm", {}))
         data_root = Path(app_cfg.data.root).resolve()
         backend = app_cfg.backend
-        backend_raw = raw.get(f"storage_{backend}", {})
+        backend_raw = self.backend_config(backend)
         localdisk_root = self._resolve_localdisk(backend, backend_raw, data_root)
         return Settings(
             backend=backend,
@@ -145,6 +172,7 @@ class ConfigManager:
             secret_key=secrets_cfg.secret_key,
             enforce_signature=app_cfg.enforce_signature,
             presign_ttl=app_cfg.presign_ttl,
+            max_temp_usage=app_cfg.max_temp_usage,
             data_root=data_root,
             localdisk_root=localdisk_root,
             metadata_dir=data_root / app_cfg.data.metadata_dir,
@@ -154,17 +182,28 @@ class ConfigManager:
             hsm=hsm_cfg,
         )
 
-    @staticmethod
-    def _resolve_localdisk(backend: str, backend_raw: dict, data_root: Path) -> Path:
-        if backend == "local_disk":
+    def _resolve_localdisk(self, backend: str, backend_raw: dict, data_root: Path) -> Path:
+        backend_type = backend_raw.get("type", backend)
+        if backend_type == "local_disk":
             root = backend_raw.get("root", "data/localdisk")
             p = Path(root)
             return p if p.is_absolute() else data_root / root
         # Unknown backends resolve later in the factory; return a safe default.
         return data_root
 
+    def reload_config(self) -> None:
+        """Reload configuration from config directory."""
+        if self.config_dir.is_dir():
+            raw = self._load_raw()
+            self._apply_env(raw)
+            self._raw = raw
+            self._build_backend_configs(raw)
+            self.settings = self._build_settings(raw)
+
     # -- runtime helpers -----------------------------------------------------
     def backend_config(self, name: str) -> dict:
+        if hasattr(self, "backend_configs") and name in self.backend_configs:
+            return dict(self.backend_configs[name])
         return dict(self._raw.get(f"storage_{name}", {}))
 
     def ensure_dirs(self) -> None:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Tuple
 
 

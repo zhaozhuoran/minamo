@@ -6,7 +6,7 @@ headers, status codes) rather than internal behaviour.
 """
 from __future__ import annotations
 
-import os
+import shutil
 import tempfile
 import threading
 import time
@@ -63,6 +63,9 @@ def server():
     yield base
     srv.should_exit = True
     thread.join(timeout=5)
+    # Give uvicorn context / lifespan cleanup a tiny bit of time to complete file closures
+    time.sleep(0.1)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 @pytest.fixture

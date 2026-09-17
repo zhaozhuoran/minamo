@@ -49,3 +49,29 @@ def test_delete_non_empty_bucket(s3):
     with pytest.raises(ClientError) as exc:
         s3.delete_bucket(Bucket=name)
     assert exc.value.response["Error"]["Code"] == "BucketNotEmpty"
+
+
+def test_create_invalid_bucket_name(s3):
+    # Bucket names that are allowed by botocore client-side validation but are invalid per S3 specs
+    for invalid_name in ["UPPER", "bu", "a" * 64, "192.168.1.1", "foo..bar", "foo_bar"]:
+        with pytest.raises(ClientError) as exc:
+            s3.create_bucket(Bucket=invalid_name)
+        assert exc.value.response["Error"]["Code"] == "InvalidBucketName"
+        assert exc.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
+
+
+def test_operations_on_invalid_bucket_name(s3):
+    # HEAD bucket operation on an invalid bucket name should return HTTP 400 (parsed as "400" by boto3 for HEAD)
+    for invalid_name in ["UPPER", "bu", "a" * 64, "192.168.1.1", "foo..bar", "foo_bar"]:
+        with pytest.raises(ClientError) as exc:
+            s3.head_bucket(Bucket=invalid_name)
+        assert exc.value.response["Error"]["Code"] == "400"
+        assert exc.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
+
+
+def test_create_valid_bucket_name_variants(s3):
+    # AWS S3 allows dots and hyphens in bucket names, starts/ends with alphanumeric
+    for valid_name in ["my-bucket.name-123", "123-bucket", "bucket.name.dot"]:
+        s3.create_bucket(Bucket=valid_name)
+        resp = s3.head_bucket(Bucket=valid_name)
+        assert resp["ResponseMetadata"]["HTTPStatusCode"] == 200

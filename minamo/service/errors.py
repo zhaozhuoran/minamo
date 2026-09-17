@@ -100,3 +100,12 @@ def signature_does_not_match() -> S3Error:
 
 def invalid_argument(message: str) -> S3Error:
     return S3Error("InvalidArgument", message, 400)
+
+
+def invalid_bucket_name(bucket: str) -> S3Error:
+    return S3Error(
+        "InvalidBucketName",
+        "The specified bucket is not valid.",
+        400,
+        bucket=bucket,
+    )

@@ -7,7 +7,7 @@ without touching the storage backends or the S3 service layer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 
@@ -24,7 +24,7 @@ class ObjectInfo:
     size: int
     etag: str
     content_type: str = "application/octet-stream"
-    last_modified: datetime = field(default_factory=datetime.now)
+    last_modified: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     storage_class: str = "STANDARD"
     content_encoding: Optional[str] = None
     expires: Optional[str] = None

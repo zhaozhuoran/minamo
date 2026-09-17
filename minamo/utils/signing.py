@@ -13,9 +13,9 @@ from __future__ import annotations
 import binascii
 import hashlib
 import hmac
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict
-from urllib.parse import quote, parse_qsl
+from urllib.parse import quote
 
 ALGORITHM = "AWS4-HMAC-SHA256"
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
@@ -193,19 +193,22 @@ def verify(
 
     Raises ``ValueError`` when the signature does not match.
     """
-    content_sha256 = headers.get("x-amz-content-sha256", "")
-    is_streaming = content_sha256 == CHUNK_ALGORITHM
-    is_query = "authorization" not in headers
+    try:
+        content_sha256 = headers.get("x-amz-content-sha256", "")
+        is_streaming = content_sha256 == CHUNK_ALGORITHM
+        is_query = "authorization" not in headers
 
-    if is_query:
-        ctx, scope = _parse_query_auth(query)
-        signed_headers_list = ctx.signed_headers.split(";") if ctx.signed_headers else []
-        exclude = {"X-Amz-Signature"}
-    else:
-        ctx, scope = _parse_authorization(headers["authorization"])
-        ctx.amz_date = headers.get("x-amz-date", "")
-        signed_headers_list = ctx.signed_headers.split(";")
-        exclude = set()
+        if is_query:
+            ctx, scope = _parse_query_auth(query)
+            signed_headers_list = ctx.signed_headers.split(";") if ctx.signed_headers else []
+            exclude = {"X-Amz-Signature"}
+        else:
+            ctx, scope = _parse_authorization(headers["authorization"])
+            ctx.amz_date = headers.get("x-amz-date", "")
+            signed_headers_list = ctx.signed_headers.split(";")
+            exclude = set()
+    except KeyError as e:
+        raise ValueError(f"Missing required authentication header or query parameter: {e}")
 
     if region is not None and ctx.region != region:
         # Region is taken from the credential scope; mismatch means forged scope.

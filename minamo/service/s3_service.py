@@ -22,10 +22,12 @@ from ..metadata.models import (
 )
 from ..metadata.store import MetadataStore
 from ..storage.backend import StorageBackend
+from ..utils.validation import validate_bucket_name
 from .errors import (
     bucket_already_exists,
     bucket_not_empty,
     invalid_argument,
+    invalid_bucket_name,
     invalid_part,
     invalid_part_order,
     invalid_range,
@@ -35,6 +37,11 @@ from .errors import (
 )
 
 
+def _validate_bucket(bucket: str) -> None:
+    if not validate_bucket_name(bucket):
+        raise invalid_bucket_name(bucket)
+
+
 class S3Service:
     def __init__(self, metadata: MetadataStore, storage: StorageBackend) -> None:
         self.metadata = metadata
@@ -42,18 +49,21 @@ class S3Service:
 
     # -- buckets -------------------------------------------------------------
     async def create_bucket(self, bucket: str) -> None:
+        _validate_bucket(bucket)
         if self.metadata.bucket_exists(bucket):
             raise bucket_already_exists(bucket)
         self.metadata.create_bucket(bucket, datetime.now(timezone.utc))
         await self.storage.create_bucket(bucket)
 
     async def head_bucket(self, bucket: str) -> BucketInfo:
+        _validate_bucket(bucket)
         info = self.metadata.get_bucket(bucket)
         if info is None:
             raise no_such_bucket(bucket)
         return info
 
     async def delete_bucket(self, bucket: str) -> None:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         listing = self.metadata.list_objects(bucket, max_keys=1)
@@ -76,6 +86,7 @@ class S3Service:
         content_encoding: Optional[str] = None,
         storage_class: str = "STANDARD",
     ) -> ObjectInfo:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         etag = hashlib.md5(data).hexdigest()
@@ -94,6 +105,7 @@ class S3Service:
         return info
 
     async def get_object(self, bucket: str, key: str) -> Tuple[ObjectInfo, AsyncIterator[bytes]]:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         info = self.metadata.get_object(bucket, key)
@@ -103,6 +115,7 @@ class S3Service:
         return info, stream
 
     async def head_object(self, bucket: str, key: str) -> ObjectInfo:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         info = self.metadata.get_object(bucket, key)
@@ -113,6 +126,7 @@ class S3Service:
     async def get_object_range(
         self, bucket: str, key: str, start: int, end: int | None
     ) -> Tuple[ObjectInfo, bytes]:
+        _validate_bucket(bucket)
         info = await self.head_object(bucket, key)
         size = info.size
         # Negative start means a suffix range: "last N bytes".
@@ -128,6 +142,7 @@ class S3Service:
         return info, data
 
     async def delete_object(self, bucket: str, key: str) -> None:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         await self.storage.delete_object(bucket, key)
@@ -142,6 +157,7 @@ class S3Service:
         continuation_token: Optional[str] = None,
         start_after: str = "",
     ) -> ListObjectsResult:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         return self.metadata.list_objects(
@@ -158,6 +174,7 @@ class S3Service:
         self, bucket: str, key: str, content_type: str = "application/octet-stream",
         metadata: Optional[Dict[str, str]] = None,
     ) -> UploadInfo:
+        _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
         upload_id = uuid.uuid4().hex
@@ -170,6 +187,7 @@ class S3Service:
     async def upload_part(
         self, bucket: str, key: str, upload_id: str, part_number: int, data: bytes
     ) -> str:
+        _validate_bucket(bucket)
         upload = self.metadata.get_upload(upload_id)
         if upload is None or upload.bucket != bucket or upload.key != key:
             raise no_such_upload(upload_id)
@@ -186,6 +204,7 @@ class S3Service:
         max_parts: int = 1000,
         part_number_marker: int = 0,
     ) -> List[PartInfo]:
+        _validate_bucket(bucket)
         upload = self.metadata.get_upload(upload_id)
         if upload is None or upload.bucket != bucket or upload.key != key:
             raise no_such_upload(upload_id)
@@ -198,6 +217,7 @@ class S3Service:
         upload_id: str,
         parts: List[Tuple[int, str]],
     ) -> ObjectInfo:
+        _validate_bucket(bucket)
         upload = self.metadata.get_upload(upload_id)
         if upload is None or upload.bucket != bucket or upload.key != key:
             raise no_such_upload(upload_id)
@@ -239,6 +259,7 @@ class S3Service:
     async def abort_multipart_upload(
         self, bucket: str, key: str, upload_id: str
     ) -> None:
+        _validate_bucket(bucket)
         upload = self.metadata.get_upload(upload_id)
         if upload is None or upload.bucket != bucket or upload.key != key:
             raise no_such_upload(upload_id)

@@ -18,7 +18,27 @@ class ListResult:
     next_marker: Optional[str] = None
 
 
+@dataclass
+class BackendCapabilities:
+    supports_random_read: bool = True
+    supports_multipart_upload: bool = True
+    supports_multipart_download: bool = True
+    max_file_size: int = -1  # -1 means unlimited
+
+
 class StorageBackend(ABC):
+    @property
+    @abstractmethod
+    def capabilities(self) -> BackendCapabilities:
+        """Returns the capabilities of this storage backend."""
+        ...
+
+    @property
+    def max_file_size(self) -> int:
+        """Helper to get the maximum allowed file size for this backend."""
+        cap = self.capabilities
+        return cap.max_file_size if cap.max_file_size > 0 else 9999999999999999
+
     # -- bucket operations ---------------------------------------------------
     @abstractmethod
     async def create_bucket(self, bucket: str) -> None: ...

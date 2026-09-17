@@ -1,25 +1,55 @@
-# Minamo service configuration.
-# See docs/configuration.md for the full reference.
+# Minamo Service Configuration
+# -----------------------------
+# This file governs global service settings such as the default backend,
+# network endpoint, and global signature verification rules.
+# For full reference, please see docs/configuration.md.
 
-# Active storage backend. The bundled backend is "local_disk".
+# Active storage backend.
+# The core bundled backend is "local_disk".
+# If HSM is enabled, this typically refers to the entrypoint/default tier backend.
+# Default: "local_disk"
 backend = "local_disk"
 
-# Host clients connect to; used to detect virtual-hosted bucket names.
+# Hostname that S3 clients connect to.
+# This is crucial for virtual-hosted-style bucket routing detection
+# (e.g., <bucket>.localhost vs. localhost/<bucket>).
+# Default: "localhost"
 endpoint_host = "localhost"
 
-# SigV4 region.
+# AWS Signature Version 4 (SigV4) region name.
+# Default: "us-east-1"
 region = "us-east-1"
 
-# Verify request signatures. Keep true in production.
+# Signature Verification Policy.
+# If true, all incoming HTTP requests must contain valid AWS SigV4 signatures.
+# Disable (false) ONLY for local development or trusted private networks.
+# Default: true
 enforce_signature = true
 
-# Default presigned URL expiry, in seconds.
+# Time-To-Live (TTL) for presigned S3 URLs, specified in seconds.
+# Default: 3600 (1 hour)
 presign_ttl = 3600
 
-# Runtime data layout (object data, metadata, cache, program state).
-# All paths are relative to the working directory unless absolute.
+# Maximum size limit for the Temporary Workspace (in bytes) used during uploads
+# and metadata assembly. Set this based on host disk space limits.
+# Default: 5368709120 (5 GB)
+max_temp_usage = 5368709120
+
+# Runtime Data Layout
+# All subdirectory paths are relative to the 'root' directory unless absolute paths are specified.
 [data]
+# Root directory where all persistent files, cache, and state will be stored.
+# Default: "data"
 root = "data"
+
+# Subdirectory to store Minamo's dual-SQLite metadata databases (metadata.db & access_logs.db).
+# Default: "metadata"
 metadata_dir = "metadata"
+
+# Subdirectory for temporary objects and the LRU/FIFO storage cache.
+# Default: "cache"
 cache_dir = "cache"
+
+# Subdirectory for internal state files (such as OneDrive token files).
+# Default: "state"
 state_dir = "state"

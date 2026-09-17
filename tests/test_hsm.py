@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 import pytest
 from pathlib import Path
@@ -13,7 +12,6 @@ from minamo.config import ConfigManager
 from minamo.metadata.store import MetadataStore
 from minamo.metadata.models import ObjectInfo
 from minamo.storage.r2 import R2Backend
-from minamo.storage.local_disk import LocalDiskBackend
 from minamo.storage.manager import StorageManager
 from minamo.storage.scheduler import HsmScheduler
 from minamo.storage.heat import ExponentialDecayHeatCalculator
@@ -260,7 +258,9 @@ async def test_hsm_scheduler_migration_and_residency():
 
         # Mock both tier backends using AsyncMock
         mock_tier0 = AsyncMock()
+        mock_tier0.max_file_size = 9999999999999999
         mock_tier1 = AsyncMock()
+        mock_tier1.max_file_size = 9999999999999999
         manager.backends = {"tier0": mock_tier0, "tier1": mock_tier1}
 
         scheduler = HsmScheduler(config, metadata, manager)
@@ -350,7 +350,9 @@ async def test_read_through_recall_and_deduplication():
 
         # Mock backends using AsyncMock
         mock_tier0 = AsyncMock()
+        mock_tier0.max_file_size = 9999999999999999
         mock_tier1 = AsyncMock()
+        mock_tier1.max_file_size = 9999999999999999
 
         async def mock_stream(bucket, key):
             yield b"hello-r2"

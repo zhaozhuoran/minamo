@@ -11,7 +11,7 @@ Load precedence is **CLI > ENV > CONFIG (file)**. Environment variables use the
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel
 
 
@@ -34,6 +34,7 @@ class AppConfig(BaseModel):
     enforce_signature: bool = True
     presign_ttl: int = 3600
     data: DataPaths = DataPaths()
+    max_temp_usage: int = 5368709120  # Default 5GB
 
 
 class SecretsConfig(BaseModel):
@@ -57,6 +58,11 @@ class HsmConfig(BaseModel):
     enabled: bool = False
     overflow_policy: str = "reject"  # reject or fallback
     tiers: List[HsmTier] = []
+    max_concurrent_migrations: int = 5
+    decay_rate_per_hour: float = 0.01
+    base_score: float = 100.0
+    read_weight: float = 10.0
+    write_weight: float = 5.0
 
 
 class Settings(BaseModel):
@@ -73,6 +79,8 @@ class Settings(BaseModel):
     secret_key: str
     enforce_signature: bool
     presign_ttl: int
+
+    max_temp_usage: int
 
     data_root: Path
     localdisk_root: Path

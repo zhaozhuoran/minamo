@@ -1,6 +1,24 @@
-# Cloudflare R2 backend configuration.
+# Cloudflare R2 / S3-Compatible Storage Backend Configuration
+# -----------------------------------------------------------
+# Connects Minamo to Cloudflare R2 or any generic, standard S3-compatible backend.
+# The filename format must be storage-<id>.toml, where <id> matches the `id` field.
+
+# Pluggable backend type. Must be "r2".
+type = "r2"
+
+# A unique backend instance identifier within Minamo.
+id = "r2"
+
+# Fully qualified target S3 / R2 API Endpoint URL.
+# Example: "https://<account_id>.r2.cloudflarestorage.com"
 endpoint_url = "http://localhost:8010"
+
+# Target access credentials.
 access_key_id = "test-access-key"
 secret_access_key = "test-secret-key"
+
+# Destination bucket name in the remote backend.
 bucket = "minamo-r2"
+
+# S3 region name. Cloudflare R2 generally defaults to "auto".
 region_name = "auto"

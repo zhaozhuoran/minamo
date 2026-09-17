@@ -32,4 +32,11 @@ def render(root: ET.Element) -> str:
 
 
 def parse(body: bytes | str) -> ET.Element:
+    """Parse an XML string/bytes safely while preventing XXE and entity expansion attacks."""
+    if isinstance(body, bytes):
+        if b"<!DOCTYPE" in body.upper() or b"<!ENTITY" in body.upper():
+            raise ValueError("XML contains forbidden DOCTYPE or ENTITY declarations")
+    else:
+        if "<!DOCTYPE" in body.upper() or "<!ENTITY" in body.upper():
+            raise ValueError("XML contains forbidden DOCTYPE or ENTITY declarations")
     return ET.fromstring(body)

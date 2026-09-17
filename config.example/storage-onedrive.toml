@@ -1,6 +1,22 @@
-# OneDrive backend configuration (future).
-# Static, operator-authored values live here. Auto-refreshed tokens
-# (access_token / refresh_token) are written by Minamo to data/state/onedrive.json.
+# Microsoft OneDrive Storage Backend Configuration
+# ------------------------------------------------
+# Connects Minamo to Microsoft OneDrive as a cloud storage tier (experimental).
+# Static, operator-authored developer credentials live here.
+# The filename format must be storage-<id>.toml, where <id> matches the `id` field.
+
+# Pluggable backend type. Must be "onedrive".
+type = "onedrive"
+
+# A unique backend instance identifier within Minamo.
+id = "onedrive"
+
+# Azure Active Directory (AAD) Application Client ID.
 client_id = ""
+
+# Azure Active Directory (AAD) Application Client Secret.
 client_secret = ""
+
+# Filepath where Minamo stores OAuth refresh and access tokens.
+# Auto-refreshed credentials are autonomously updated here.
+# Default: "data/state/onedrive.json"
 state_file = "data/state/onedrive.json"

@@ -1,0 +1,17 @@
+# HackClub CDN Backend Configuration
+# ----------------------------------
+# Connects Minamo to the HackClub CDN storage backend.
+# The filename format must be storage-<id>.toml, where <id> matches the `id` field.
+
+# Pluggable backend type. Must be "hackclub_cdn".
+type = "hackclub_cdn"
+
+# A unique backend instance identifier within Minamo.
+id = "cdn1"
+
+# HackClub CDN API key.
+api_key = "sk_cdn_your_key_here"
+
+# The CDN host endpoint.
+# Optional. Defaults to "https://cdn.hackclub.com".
+base_url = "https://cdn.hackclub.com"

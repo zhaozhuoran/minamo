@@ -11,14 +11,24 @@ from __future__ import annotations
 
 import asyncio
 import io
+from pathlib import Path
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
-from typing import AsyncIterator, List, Optional
-from .backend import StorageBackend, ListResult
+from typing import AsyncIterator, List
+from .backend import StorageBackend, ListResult, BackendCapabilities
 
 
 class R2Backend(StorageBackend):
+    @property
+    def capabilities(self) -> BackendCapabilities:
+        return BackendCapabilities(
+            supports_random_read=True,
+            supports_multipart_upload=True,
+            supports_multipart_download=True,
+            max_file_size=-1,
+        )
+
     def __init__(
         self,
         endpoint_url: str,
@@ -95,12 +105,16 @@ class R2Backend(StorageBackend):
         await asyncio.to_thread(_delete)
 
     # -- object operations ---------------------------------------------------
-    async def put_object(self, bucket: str, key: str, data: bytes) -> int:
+    async def put_object(self, bucket: str, key: str, data: bytes | Path) -> int:
         r2_key = f"{bucket}/{key}"
         def _put():
             client = self._get_client()
-            client.put_object(Bucket=self.bucket_name, Key=r2_key, Body=data)
-            return len(data)
+            if isinstance(data, Path):
+                client.upload_file(str(data), self.bucket_name, r2_key)
+                return data.stat().st_size
+            else:
+                client.put_object(Bucket=self.bucket_name, Key=r2_key, Body=data)
+                return len(data)
         return await asyncio.to_thread(_put)
 
     async def get_object(self, bucket: str, key: str) -> AsyncIterator[bytes]:
@@ -192,16 +206,29 @@ class R2Backend(StorageBackend):
         self, bucket: str, key: str, upload_id: str, part_numbers: List[int]
     ) -> int:
         r2_key = f"{bucket}/{key}"
+        import tempfile
         def _compose():
             client = self._get_client()
-            concatenated = io.BytesIO()
-            for pn in part_numbers:
-                part_k = f".minamo-mpu/{bucket}/{upload_id}/{pn:08d}"
-                resp = client.get_object(Bucket=self.bucket_name, Key=part_k)
-                concatenated.write(resp["Body"].read())
-            data = concatenated.getvalue()
-            client.put_object(Bucket=self.bucket_name, Key=r2_key, Body=data)
-            return len(data)
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                try:
+                    for pn in part_numbers:
+                        part_k = f".minamo-mpu/{bucket}/{upload_id}/{pn:08d}"
+                        resp = client.get_object(Bucket=self.bucket_name, Key=part_k)
+                        body_stream = resp["Body"]
+                        while True:
+                            chunk = body_stream.read(64 * 1024)
+                            if not chunk:
+                                break
+                            tmp_file.write(chunk)
+                    tmp_file.flush()
+                    tmp_file.close()
+
+                    client.upload_file(str(tmp_path), self.bucket_name, r2_key)
+                    return tmp_path.stat().st_size
+                finally:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
         return await asyncio.to_thread(_compose)
 
     async def abort_upload(self, bucket: str, upload_id: str) -> None:

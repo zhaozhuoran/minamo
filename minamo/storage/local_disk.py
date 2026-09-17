@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path, PurePosixPath
 from typing import AsyncIterator, List
 
-from .backend import ListResult, StorageBackend
+from .backend import ListResult, StorageBackend, BackendCapabilities
 
 _MPU_DIR = ".minamo-mpu"
 
@@ -20,6 +20,15 @@ _MPU_DIR = ".minamo-mpu"
 class LocalDiskBackend(StorageBackend):
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
+
+    @property
+    def capabilities(self) -> BackendCapabilities:
+        return BackendCapabilities(
+            supports_random_read=True,
+            supports_multipart_upload=True,
+            supports_multipart_download=True,
+            max_file_size=-1,
+        )
 
     # -- path helpers --------------------------------------------------------
     def _bucket_path(self, bucket: str) -> Path:
@@ -64,12 +73,17 @@ class LocalDiskBackend(StorageBackend):
         await asyncio.to_thread(_delete)
 
     # -- object operations ---------------------------------------------------
-    async def put_object(self, bucket: str, key: str, data: bytes) -> int:
+    async def put_object(self, bucket: str, key: str, data: bytes | Path) -> int:
         def _write() -> int:
             path = self._object_path(bucket, key)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
-            return len(data)
+            if isinstance(data, Path):
+                import shutil
+                shutil.copy2(data, path)
+                return path.stat().st_size
+            else:
+                path.write_bytes(data)
+                return len(data)
 
         return await asyncio.to_thread(_write)
 

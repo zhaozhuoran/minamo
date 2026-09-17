@@ -61,6 +61,7 @@ def create_app(config: ConfigManager | None = None) -> FastAPI:
 
         if scheduler:
             await scheduler.stop()
+        metadata.close()
 
     app = FastAPI(title="Minamo", version="0.1.0", lifespan=lifespan)
     app.include_router(router)
@@ -71,6 +72,29 @@ def create_app(config: ConfigManager | None = None) -> FastAPI:
         request_id = getattr(request.state, "request_id", "unknown")
         body = error_xml(exc.code, exc.message, request.url.path, request_id)
         return Response(body, status_code=exc.http_status, media_type="application/xml")
+
+    @app.exception_handler(ValueError)
+    async def handle_value_error(request: Request, exc: ValueError) -> Response:
+        request_id = getattr(request.state, "request_id", "unknown")
+        msg = str(exc)
+        # Standard S3 error code mapping for value validation or XML parsing error
+        code = "MalformedXML" if "XML" in msg or "xml" in msg.lower() else "InvalidArgument"
+        body = error_xml(code, msg, request.url.path, request_id)
+        return Response(body, status_code=400, media_type="application/xml")
+
+    @app.exception_handler(Exception)
+    async def handle_generic_exception(request: Request, exc: Exception) -> Response:
+        # Avoid intercepting standard S3Error and ValueError which have more specific handlers
+        if isinstance(exc, S3Error):
+            return await handle_s3_error(request, exc)
+        if isinstance(exc, ValueError):
+            return await handle_value_error(request, exc)
+
+        import logging
+        logging.getLogger("minamo.app").error("Unhandled exception occurred", exc_info=exc)
+        request_id = getattr(request.state, "request_id", "unknown")
+        body = error_xml("InternalError", "We encountered an internal error. Please try again.", request.url.path, request_id)
+        return Response(body, status_code=500, media_type="application/xml")
 
     return app
 

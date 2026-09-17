@@ -1,3 +1,15 @@
-# Local Disk backend configuration.
-# Root directory for object data. Relative paths resolve under data.root.
+# Local Disk Storage Backend Configuration
+# ----------------------------------------
+# This backend stores object payloads directly on the local host filesystem.
+# The filename format must be storage-<id>.toml, where <id> matches the `id` field.
+
+# Pluggable backend type. Must be "local_disk".
+type = "local_disk"
+
+# A unique backend instance identifier within Minamo.
+id = "local_disk"
+
+# Root directory for object data payloads.
+# Relative paths are automatically resolved under the global data.root directory.
+# Default: "data/localdisk"
 root = "data/localdisk"

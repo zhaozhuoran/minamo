@@ -16,7 +16,6 @@ import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import StreamingResponse
 
 from ..config import Settings
 from ..service.errors import S3Error
@@ -64,7 +63,7 @@ def _user_metadata(headers: dict[str, str]) -> dict[str, str]:
     return meta
 
 
-def _parse_range(header: str) -> tuple[int, int] | None:
+def _parse_range(header: str) -> tuple[int, int | None] | None:
     """Parse a single-range HTTP Range header.
 
     Supports ``bytes=START-END``, ``bytes=START-`` and ``bytes=-N`` (suffix).
@@ -88,9 +87,11 @@ def _parse_range(header: str) -> tuple[int, int] | None:
 
 
 def _parse_complete_body(body: bytes) -> List[Tuple[int, str]]:
-    root = ET.fromstring(body)
-    # Strip the S3 XML namespace so local tag names match regardless of xmlns.
-    ns = "{http://s3.amazonaws.com/doc/2006-03-01/}"
+    from ..utils.xml import parse as parse_xml
+    try:
+        root = parse_xml(body)
+    except Exception as e:
+        raise ValueError(f"Invalid XML: {e}")
 
     def local(tag: str) -> str:
         return tag.split("}", 1)[1] if "}" in tag else tag
