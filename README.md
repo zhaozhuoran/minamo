@@ -83,22 +83,22 @@ Each layer has a single responsibility. HTTP handlers never access storage direc
 - [x] SigV4 authentication
 - [x] Multipart Upload
 - [x] Presigned URLs
-- [ ] Complete compatibility testing
-- [ ] Production hardening
+- [x] Complete compatibility testing
+- [x] Production hardening
 
 ## Phase 2
 
-- [ ] Multi-storage routing
-- [ ] Automatic object migration
-- [ ] Background workers
-- [ ] Storage policies
+- [x] Multi-storage routing
+- [x] Automatic object migration
+- [x] Background workers
+- [x] Storage policies
 
 ## Phase 3
 
-- [ ] Local cache
-- [ ] OneDrive backend
-- [ ] Cloudflare R2 backend
-- [ ] Generic S3 backend
+- [x] Local cache
+- [x] OneDrive backend
+- [x] Cloudflare R2 backend
+- [x] Generic S3 backend
 - [ ] Storage analytics
 - [ ] Lifecycle management
 
@@ -157,22 +157,9 @@ print(
 
 # Testing
 
-Compatibility is validated using real AWS SDK clients against a live Minamo server.
-
 ```bash
 pytest
 ```
-
-The current implementation passes **22 boto3 compatibility tests**.
-
-# Design Goals
-
-- Full S3 compatibility
-- Simple, maintainable architecture
-- Pluggable storage providers
-- Low operational cost
-- Zero application-side changes
-- Storage provider independence
 
 # License
 
