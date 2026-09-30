@@ -36,6 +36,11 @@ ENV_MAP: dict[str, list[str]] = {
     "MINAMO_ACCESS_KEY": ["secrets", "access_key"],
     "MINAMO_SECRET_KEY": ["secrets", "secret_key"],
     "MINAMO_DATA_ROOT": ["app", "data", "root"],
+    "MINAMO_LOGS_DIR": ["app", "data", "logs_dir"],
+    "MINAMO_ADMIN_ENABLED": ["app", "admin", "enabled"],
+    "MINAMO_ADMIN_HOST": ["app", "admin", "host"],
+    "MINAMO_ADMIN_PORT": ["app", "admin", "port"],
+    "MINAMO_ADMIN_PASSWORD": ["app", "admin", "password"],
 }
 
 
@@ -179,6 +184,8 @@ class ConfigManager:
             cache_dir=data_root / app_cfg.data.cache_dir,
             state_dir=data_root / app_cfg.data.state_dir,
             config_dir=self.config_dir,
+            logs_dir=Path(app_cfg.data.logs_dir).resolve(),
+            admin=app_cfg.admin,
             hsm=hsm_cfg,
         )
 
@@ -212,6 +219,7 @@ class ConfigManager:
             self.settings.metadata_dir,
             self.settings.cache_dir,
             self.settings.state_dir,
+            self.settings.logs_dir,
         ):
             d.mkdir(parents=True, exist_ok=True)
 

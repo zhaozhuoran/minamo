@@ -199,8 +199,8 @@ class StorageManager(StorageBackend):
 
         # Iterate over eligible tiers to find one with available capacity
         for i, tier in enumerate(eligible_tiers):
-            # The last eligible tier acts as the terminal tier/fallback
-            if i == len(eligible_tiers) - 1:
+            # The last eligible tier acts as the terminal tier/fallback when overflow_policy is fallback
+            if i == len(eligible_tiers) - 1 and self.hsm_settings.overflow_policy != "reject":
                 return tier.id
 
             current_size = self.metadata.get_tier_size(tier.id)

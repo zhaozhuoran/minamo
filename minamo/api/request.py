@@ -10,12 +10,16 @@ the stack can stay addressing-style agnostic.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from urllib.parse import unquote
 
 from starlette.requests import Request
 
 from ..config import Settings
+
+
+logger = logging.getLogger("minamo.request")
 
 
 @dataclass
@@ -28,33 +32,52 @@ class Target:
 
 
 def resolve_target(request: Request, settings: Settings) -> Target:
+    # S3 uses x-id=ListBuckets to list all buckets via the root path.
+    # This overrides host-based and path-based bucket detection.
+    q = request.query_params
+    logger.debug("resolve_target: query_params=%s", dict(q.multi_items()))
+    for key, val in q.multi_items():
+        if key.lower() == "x-id" and val == "ListBuckets":
+            logger.debug("resolve_target: x-id=ListBuckets detected, returning bucket=None")
+            return Target(bucket=None, key=None, is_bucket_op=True)
+
     host = request.headers.get("host", "")
-    if ":" in host:
-        host = host.split(":", 1)[0]
+    if host.startswith("["):
+        if "]" in host:
+            host = host[1:host.index("]")]
+    elif ":" in host and host.count(":") == 1:
+        host = host.rsplit(":", 1)[0]
+
     endpoint = settings.endpoint_host
+    if endpoint.startswith("["):
+        if "]" in endpoint:
+            endpoint = endpoint[1:endpoint.index("]")]
+    elif ":" in endpoint and endpoint.count(":") == 1:
+        endpoint = endpoint.rsplit(":", 1)[0]
 
     bucket_from_host: str | None = None
     if host and host != endpoint and host.endswith("." + endpoint):
         bucket_from_host = host[: -(len(endpoint) + 1)]
 
-    path = unquote(request.url.path)
-    # Normalise: strip trailing slash so "/bucket/" == "/bucket".
-    path = path.rstrip("/")
+    raw_path = unquote(request.url.path)
 
     if bucket_from_host:
         # virtual-hosted style: host carries the bucket, path is the key
-        key = path.lstrip("/") if path != "" else ""
-        key = key if key != "" else None
-        if key is None:
+        key = raw_path.lstrip("/")
+        if not key:
             return Target(bucket=bucket_from_host, key=None, is_bucket_op=True)
         return Target(bucket=bucket_from_host, key=key, is_bucket_op=False)
 
     # path-style
-    segments = [s for s in path.split("/") if s != ""]
+    path_clean = raw_path.rstrip("/")
+    segments = [s for s in path_clean.split("/") if s != ""]
     if not segments:
         return Target(bucket=None, key=None, is_bucket_op=False)
     bucket = segments[0]
     if len(segments) == 1:
         return Target(bucket=bucket, key=None, is_bucket_op=True)
-    key = "/".join(segments[1:])
+
+    # Preserve trailing slashes in object keys
+    prefix_len = len("/" + bucket + "/")
+    key = raw_path[prefix_len:] if len(raw_path) >= prefix_len else "/".join(segments[1:])
     return Target(bucket=bucket, key=key, is_bucket_op=False)

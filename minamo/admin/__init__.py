@@ -1,0 +1,2 @@
+"""Minamo Admin Console package.
+"""

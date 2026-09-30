@@ -20,6 +20,32 @@ def test_head_object(s3, unique_bucket):
     assert resp["ContentLength"] == 4
 
 
+def test_key_with_trailing_slash(s3, unique_bucket):
+    folder_key = "folder/sub/"
+    s3.put_object(Bucket=unique_bucket, Key=folder_key, Body=b"")
+    head_resp = s3.head_object(Bucket=unique_bucket, Key=folder_key)
+    assert head_resp["ContentLength"] == 0
+
+    get_resp = s3.get_object(Bucket=unique_bucket, Key=folder_key)
+    assert get_resp["Body"].read() == b""
+
+    # Test fallback head without trailing slash
+    head_fallback = s3.head_object(Bucket=unique_bucket, Key="folder/sub")
+    assert head_fallback["ContentLength"] == 0
+
+
+def test_virtual_directory_prefix_head_and_get(s3, unique_bucket):
+    # Create an object inside a prefix directory without creating explicit folder object
+    s3.put_object(Bucket=unique_bucket, Key="openrouter-traces/2026-09-27/trace1.json", Body=b"{}")
+
+    # HEAD on prefix "openrouter-traces/" should succeed (200 OK) via virtual directory fallback
+    head_resp = s3.head_object(Bucket=unique_bucket, Key="openrouter-traces/")
+    assert head_resp["ContentLength"] == 0
+
+    get_resp = s3.get_object(Bucket=unique_bucket, Key="openrouter-traces/")
+    assert get_resp["Body"].read() == b""
+
+
 def test_head_missing_object(s3, unique_bucket):
     # AWS returns 404 (not NoSuchKey) for HEAD on a missing key.
     with pytest.raises(ClientError) as exc:

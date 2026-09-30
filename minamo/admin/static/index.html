@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minamo Admin Console</title>
+  <!-- Tailwind CSS CDN -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest" onload="lucide.createIcons()"></script>
+  <style>
+    /* Custom scrollbar for log views */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans bg-slate-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- NOTIFICATION TOAST -->
+  <div id="toast" class="fixed top-4 right-4 z-50 hidden" role="alert" aria-live="assertive">
+    <div class="bg-rose-600/90 backdrop-blur text-white px-4 py-3 rounded-lg shadow-xl text-sm flex items-center gap-2 max-w-md">
+      <i data-lucide="alert-circle" class="w-4 h-4 shrink-0" aria-hidden="true"></i>
+      <span id="toastMessage"></span>
+      <button id="toastClose" type="button" aria-label="Close notification" class="ml-2 hover:text-rose-200"><i data-lucide="x" class="w-3.5 h-3.5" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
+  <!-- LOGIN MODAL -->
+  <div id="loginModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-500 border border-brand-500/30 flex items-center justify-center text-xl">
+          💧
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-white">Minamo Console</h2>
+          <p class="text-xs text-slate-400">Sign in to control plane</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="space-y-4">
+        <div id="loginError" class="hidden p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs"></div>
+
+        <div>
+          <label for="loginAccessKey" class="block text-xs font-semibold text-slate-300 mb-1">Access Key</label>
+          <input type="text" id="loginAccessKey" placeholder="minamo" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 text-white placeholder-slate-600">
+        </div>
+
+        <div>
+          <label for="loginSecretKey" class="block text-xs font-semibold text-slate-300 mb-1">Secret Key / Password</label>
+          <input type="password" id="loginSecretKey" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:border-brand-500 text-white placeholder-slate-600">
+        </div>
+
+        <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-brand-600/20">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0">
+      <div>
+        <!-- Logo -->
+        <div class="p-6 border-b border-slate-800/60 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-500/30 text-brand-400 flex items-center justify-center">
+            💧
+          </div>
+          <div>
+            <h1 class="font-bold text-sm text-white tracking-wide">Minamo</h1>
+            <p class="text-[10px] text-slate-400 font-mono">Control Plane</p>
+          </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="p-4 space-y-6 text-xs">
+          <div>
+            <a href="#overview" data-nav="overview" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview
+            </a>
+          </div>
+
+          <!-- Storage -->
+          <div>
+            <div class="px-3 mb-2 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Storage</div>
+            <div class="space-y-1">
+              <a href="#buckets" data-nav="buckets" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="folder" class="w-4 h-4"></i> Buckets
+              </a>
+              <a href="#tiers" data-nav="tiers" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="layers" class="w-4 h-4"></i> HSM Tiers
+              </a>
+              <a href="#cache" data-nav="cache" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="hard-drive" class="w-4 h-4"></i> Cache Manager
+              </a>
+            </div>
+          </div>
+
+          <!-- Infrastructure -->
+          <div>
+            <div class="px-3 mb-2 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Infrastructure</div>
+            <div class="space-y-1">
+              <a href="#backends" data-nav="backends" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="server" class="w-4 h-4"></i> Storage Backends
+              </a>
+              <a href="#hsm" data-nav="hsm" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="cpu" class="w-4 h-4"></i> HSM Scheduler
+              </a>
+            </div>
+          </div>
+
+          <!-- Observability -->
+          <div>
+            <div class="px-3 mb-2 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Observability</div>
+            <div class="space-y-1">
+              <a href="#access-logs" data-nav="access-logs" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="activity" class="w-4 h-4"></i> Access Logs
+              </a>
+              <a href="#app-logs" data-nav="app-logs" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="terminal" class="w-4 h-4"></i> Application Logs
+              </a>
+            </div>
+          </div>
+
+          <!-- Security -->
+          <div>
+            <div class="px-3 mb-2 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">Security</div>
+            <div class="space-y-1">
+              <a href="#security" data-nav="security" class="nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i data-lucide="shield-check" class="w-4 h-4"></i> API Keys & Security
+              </a>
+            </div>
+          </div>
+        </nav>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="p-4 border-t border-slate-800/60 text-[11px] text-slate-400 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Minamo Online</span>
+        </div>
+        <button id="logoutBtn" type="button" aria-label="Sign Out" class="text-slate-500 hover:text-rose-400 transition" title="Sign Out">
+          <i data-lucide="log-out" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto bg-slate-950">
+
+      <!-- TOP HEADER BAR -->
+      <header class="px-8 py-5 border-b border-slate-800/60 flex items-center justify-between sticky top-0 bg-slate-950/90 backdrop-blur z-20">
+        <div class="flex items-center gap-3">
+          <h2 id="pageTitle" class="text-lg font-bold text-white tracking-tight">Overview</h2>
+          <span id="connectionBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span id="connectionDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="connectionText">Connected</span>
+          </span>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div class="text-xs text-slate-500 font-mono" id="lastUpdated">Updated just now</div>
+          <button id="refreshBtn" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+          </button>
+        </div>
+      </header>
+
+      <!-- PAGE VIEWS -->
+      <div class="p-8 space-y-8 flex-1">
+
+        <!-- OVERVIEW VIEW -->
+        <section id="view-overview" class="view-panel space-y-8">
+          <!-- Metric Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="p-5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Storage</div>
+              <div class="text-2xl font-extrabold text-white" id="statStorageBytes">0 B</div>
+              <div class="text-[11px] text-slate-400">Total stored payload</div>
+            </div>
+
+            <div class="p-5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Objects</div>
+              <div class="text-2xl font-extrabold text-white" id="statObjectsCount">0</div>
+              <div class="text-[11px] text-slate-400">Total registered objects</div>
+            </div>
+
+            <div class="p-5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Buckets</div>
+              <div class="text-2xl font-extrabold text-white" id="statBucketsCount">0</div>
+              <div class="text-[11px] text-slate-400">Active bucket namespaces</div>
+            </div>
+
+            <div class="p-5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Cache</div>
+              <div class="text-2xl font-extrabold text-white" id="statCacheBytes">0 B</div>
+              <div class="text-[11px] text-slate-400" id="statCacheEntries">0 entries</div>
+            </div>
+
+            <div class="p-5 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">HSM Migrations</div>
+              <div class="text-2xl font-extrabold text-white" id="statHsmActive">0 active</div>
+              <div class="text-[11px] text-slate-400" id="statHsmMoved">0 B moved</div>
+            </div>
+          </div>
+
+          <!-- Tier Distribution & System Health -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Distribution -->
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="font-bold text-white text-sm">Storage Distribution by Tier</h3>
+                  <p class="text-xs text-slate-400">Hierarchical breakdown across active HSM storage tiers</p>
+                </div>
+                <span id="hsmBadge" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                  HSM Enabled
+                </span>
+              </div>
+
+              <div id="tierBarsContainer" class="space-y-4">
+                <p class="text-xs text-slate-500 italic">No tiers configured or loading...</p>
+              </div>
+            </div>
+
+            <!-- System Health -->
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+              <h3 class="font-bold text-white text-sm">System Health</h3>
+
+              <div class="space-y-3 text-xs">
+                <div class="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                   <span class="text-slate-300">S3 Gateway API</span>
+                   <span id="healthS3Status" class="text-emerald-400 font-medium flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Operational</span>
+                 </div>
+
+                 <div class="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                   <span class="text-slate-300">Metadata Engine</span>
+                   <span id="healthMetadataStatus" class="text-emerald-400 font-medium flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Operational</span>
+                 </div>
+
+                 <div class="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800/60 rounded-lg">
+                   <span class="text-slate-300">HSM Scheduler</span>
+                   <span id="healthHsmStatus" class="text-emerald-400 font-medium flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Operational</span>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Activity Stream -->
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <h3 class="font-bold text-white text-sm">Recent Activity Stream</h3>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800/80 text-slate-400">
+                    <th class="pb-3 font-semibold">Event</th>
+                    <th class="pb-3 font-semibold">Bucket</th>
+                    <th class="pb-3 font-semibold">Object Key</th>
+                    <th class="pb-3 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="recentActivityBody" class="divide-y divide-slate-800/40 text-slate-300">
+                  <tr><td colspan="4" class="py-4 text-center text-slate-500">No recent activity recorded</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- BUCKETS VIEW -->
+        <section id="view-buckets" class="view-panel hidden space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-white text-base">Buckets</h3>
+              <p class="text-xs text-slate-400">Manage S3 bucket namespaces and view contents</p>
+            </div>
+            <button id="openCreateBucketBtn" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-lg shadow-brand-600/20">
+              <i data-lucide="plus" class="w-4 h-4"></i> Create Bucket
+            </button>
+          </div>
+
+          <!-- Buckets Table -->
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 border-b border-slate-800 text-slate-400">
+                <tr>
+                  <th class="p-4 font-semibold">Name</th>
+                  <th class="p-4 font-semibold">Backend</th>
+                  <th class="p-4 font-semibold">Region</th>
+                  <th class="p-4 font-semibold">Objects</th>
+                  <th class="p-4 font-semibold">Total Size</th>
+                  <th class="p-4 font-semibold">Created</th>
+                  <th class="p-4 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="bucketsTableBody" class="divide-y divide-slate-800/40 text-slate-300">
+                <tr><td colspan="7" class="p-6 text-center text-slate-500">Loading buckets...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Bucket Detail / Objects Section -->
+          <div id="bucketDetailSection" class="hidden bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h4 class="font-bold text-white text-sm" id="detailBucketName">bucket-name</h4>
+                <p class="text-xs text-slate-400">Browsing registered objects</p>
+              </div>
+              <button id="closeBucketDetailBtn" class="text-slate-400 hover:text-white text-xs">Close</button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400">
+                    <th class="pb-3 font-semibold">Key</th>
+                    <th class="pb-3 font-semibold">Size</th>
+                    <th class="pb-3 font-semibold">Tier</th>
+                    <th class="pb-3 font-semibold">Heat Score</th>
+                    <th class="pb-3 font-semibold">Migration State</th>
+                    <th class="pb-3 font-semibold">Last Modified</th>
+                    <th class="pb-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="objectsTableBody" class="divide-y divide-slate-800/40 text-slate-300">
+                  <tr><td colspan="7" class="py-4 text-center text-slate-500">No objects in bucket</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TIERS VIEW -->
+        <section id="view-tiers" class="view-panel hidden space-y-6">
+          <div>
+            <h3 class="font-bold text-white text-base">HSM Storage Tiers</h3>
+            <p class="text-xs text-slate-400">Configured tiered storage hierarchy, capacities, and heat profiles</p>
+          </div>
+
+          <div id="tiersCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <p class="text-xs text-slate-500 italic">Loading storage tiers...</p>
+          </div>
+        </section>
+
+        <!-- BACKENDS VIEW -->
+        <section id="view-backends" class="view-panel hidden space-y-6">
+          <div>
+            <h3 class="font-bold text-white text-base">Storage Backends</h3>
+            <p class="text-xs text-slate-400">Pluggable backend configurations and health status</p>
+          </div>
+
+          <div id="backendsCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <p class="text-xs text-slate-500 italic">Loading backends...</p>
+          </div>
+        </section>
+
+        <!-- CACHE VIEW -->
+        <section id="view-cache" class="view-panel hidden space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-white text-base">Cache Manager</h3>
+              <p class="text-xs text-slate-400">Standalone LRU/FIFO read-through storage cache</p>
+            </div>
+            <button id="clearCacheBtn" class="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-semibold flex items-center gap-2 transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i> Clear Cache
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="p-6 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-3">
+              <div class="text-xs text-slate-400 font-semibold uppercase">Current Utilization</div>
+              <div class="text-2xl font-extrabold text-white" id="cacheCurrentSize">0 B</div>
+              <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                <div id="cacheProgressBar" class="bg-brand-500 h-full w-0 transition-all"></div>
+              </div>
+            </div>
+
+            <div class="p-6 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-xs text-slate-400 font-semibold uppercase">Cached Entries</div>
+              <div class="text-2xl font-extrabold text-white" id="cacheEntriesCount">0</div>
+              <div class="text-xs text-slate-500" id="cachePolicy">Policy: LRU</div>
+            </div>
+
+            <div class="p-6 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-2">
+              <div class="text-xs text-slate-400 font-semibold uppercase">Cache Directory</div>
+              <div class="text-xs font-mono text-slate-300 truncate" id="cacheDirectory">data/cache</div>
+              <div class="text-xs text-slate-500">Local disk cache path</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- HSM SCHEDULER VIEW -->
+        <section id="view-hsm" class="view-panel hidden space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-white text-base">HSM Scheduler</h3>
+              <p class="text-xs text-slate-400">Background tier migration scheduler and active task registry</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button id="hsmTickBtn" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1.5 transition">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i> Trigger Tick Now
+              </button>
+              <button id="hsmPauseResumeBtn" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold transition">
+                Pause Scheduler
+              </button>
+            </div>
+          </div>
+
+          <!-- HSM Stats Bar -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div class="p-4 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-1">
+              <div class="text-[10px] uppercase font-semibold text-slate-400">Status</div>
+              <div class="text-lg font-bold text-white" id="hsmStatusText">Running</div>
+            </div>
+            <div class="p-4 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-1">
+              <div class="text-[10px] uppercase font-semibold text-slate-400">Active Tasks</div>
+              <div class="text-lg font-bold text-white" id="hsmActiveCount">0</div>
+            </div>
+            <div class="p-4 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-1">
+              <div class="text-[10px] uppercase font-semibold text-slate-400">Successful Migrations</div>
+              <div class="text-lg font-bold text-white" id="hsmSuccCount">0</div>
+            </div>
+            <div class="p-4 bg-slate-900/60 border border-slate-800/80 rounded-xl space-y-1">
+              <div class="text-[10px] uppercase font-semibold text-slate-400">Transferred Volume</div>
+              <div class="text-lg font-bold text-white" id="hsmMovedVolume">0 B</div>
+            </div>
+          </div>
+
+          <!-- Migration Task History -->
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <h4 class="font-bold text-white text-sm">Migration History Log</h4>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400">
+                    <th class="pb-3 font-semibold">ID</th>
+                    <th class="pb-3 font-semibold">Object</th>
+                    <th class="pb-3 font-semibold">From</th>
+                    <th class="pb-3 font-semibold">To</th>
+                    <th class="pb-3 font-semibold">Status</th>
+                    <th class="pb-3 font-semibold">Retries</th>
+                    <th class="pb-3 font-semibold">Created At</th>
+                  </tr>
+                </thead>
+                <tbody id="migrationHistoryTableBody" class="divide-y divide-slate-800/40 text-slate-300">
+                  <tr><td colspan="7" class="py-4 text-center text-slate-500">No migration history records found</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ACCESS LOGS VIEW -->
+        <section id="view-access-logs" class="view-panel hidden space-y-6">
+          <div>
+            <h3 class="font-bold text-white text-base">Access Logs</h3>
+            <p class="text-xs text-slate-400">Raw S3 read/write request event log</p>
+          </div>
+
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <div class="flex flex-wrap gap-3">
+              <input type="text" id="accessLogsBucketFilter" placeholder="Filter by bucket..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+              <select id="accessLogsTypeFilter" class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+                <option value="">All Event Types</option>
+                <option value="READ">READ</option>
+                <option value="WRITE">WRITE</option>
+              </select>
+              <button id="filterAccessLogsBtn" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold transition">Filter</button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400">
+                    <th class="pb-3 font-semibold">Event</th>
+                    <th class="pb-3 font-semibold">Bucket</th>
+                    <th class="pb-3 font-semibold">Key</th>
+                    <th class="pb-3 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="accessLogsTableBody" class="divide-y divide-slate-800/40 text-slate-300">
+                  <tr><td colspan="4" class="py-4 text-center text-slate-500">Loading access logs...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- APPLICATION LOGS VIEW -->
+        <section id="view-app-logs" class="view-panel hidden space-y-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-white text-base">Application Logs</h3>
+              <p class="text-xs text-slate-400">Real-time log viewer from logs/latest.log</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="appLogsSearch" placeholder="Search log text..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500">
+              <button id="refreshAppLogsBtn" class="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-medium">Refresh</button>
+            </div>
+          </div>
+
+          <div id="appLogsConsole" class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 font-mono text-xs text-slate-300 h-96 overflow-y-auto space-y-1">
+            <p class="text-slate-500">Loading application logs...</p>
+          </div>
+        </section>
+
+        <!-- SECURITY VIEW -->
+        <section id="view-security" class="view-panel hidden space-y-6">
+          <div>
+            <h3 class="font-bold text-white text-base">API Keys & Security</h3>
+            <p class="text-xs text-slate-400">Authentication settings and access policy report</p>
+          </div>
+
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-6 max-w-2xl">
+            <div class="flex items-center gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              <i data-lucide="shield-alert" class="w-5 h-5 shrink-0 text-amber-400"></i>
+              <div>
+                <span class="font-bold">Single Credential Configuration</span>
+                <p class="mt-0.5 text-amber-400/80" id="securityMessage">
+                  Authentication is currently configured with a single global access key. Multi-key management and bucket-level permissions are not yet configured.
+                </p>
+              </div>
+            </div>
+
+            <div class="space-y-4 text-xs">
+              <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <span class="text-slate-400">Global Access Key</span>
+                <span class="font-mono text-white bg-slate-950 px-2.5 py-1 rounded border border-slate-800" id="securityAccessKey">min***</span>
+              </div>
+
+              <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <span class="text-slate-400">Multi-Tenant API Keys</span>
+                <span class="text-slate-500 font-medium">Not Configured</span>
+              </div>
+
+              <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <span class="text-slate-400">Bucket-Level RBAC</span>
+                <span class="text-slate-500 font-medium">Not Configured</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- CREATE BUCKET MODAL -->
+  <div id="createBucketModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4">
+      <h3 class="text-base font-bold text-white">Create New Bucket</h3>
+
+      <form id="createBucketForm" class="space-y-4 text-xs">
+        <div>
+          <label for="newBucketName" class="block font-semibold text-slate-300 mb-1">Bucket Name</label>
+          <input type="text" id="newBucketName" required placeholder="my-new-bucket" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label for="newBucketBackend" class="block font-semibold text-slate-300 mb-1">Backend</label>
+          <input type="text" id="newBucketBackend" value="local_disk" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label for="newBucketRegion" class="block font-semibold text-slate-300 mb-1">Region</label>
+          <input type="text" id="newBucketRegion" value="us-east-1" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" id="closeCreateBucketModalBtn" class="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-lg font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-semibold">Create Bucket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CLIENT APP SCRIPT -->
+  <script>
+    // State
+    let authToken = localStorage.getItem('minamo_admin_token') || '';
+
+    function setAuthToken(token) {
+      authToken = token;
+      if (token) {
+        localStorage.setItem('minamo_admin_token', token);
+        document.cookie = `minamo_admin_token=${token}; path=/; SameSite=Lax`;
+      } else {
+        localStorage.removeItem('minamo_admin_token');
+        document.cookie = `minamo_admin_token=; path=/; max-age=0`;
+      }
+    }
+
+    if (authToken) {
+      document.cookie = `minamo_admin_token=${authToken}; path=/; SameSite=Lax`;
+    }
+
+    // Elements
+    const loginModal = document.getElementById('loginModal');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toastMessage');
+    const toastClose = document.getElementById('toastClose');
+
+    // Connection Status Badge
+    const connectionBadge = document.getElementById('connectionBadge');
+    const connectionDot = document.getElementById('connectionDot');
+    const connectionText = document.getElementById('connectionText');
+
+    let connectionStatus = 'disconnected';
+
+    function updateConnectionStatus(status) {
+      connectionStatus = status;
+      if (status === 'connected') {
+        connectionBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        connectionDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+        connectionText.textContent = 'Connected';
+        stopHttpPollingFallback();
+      } else if (status === 'polling') {
+        connectionBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20';
+        connectionDot.className = 'w-1.5 h-1.5 rounded-full bg-blue-400';
+        connectionText.textContent = 'Connected (Polling)';
+      } else if (status === 'reconnecting') {
+        connectionBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        connectionDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping';
+        connectionText.textContent = 'Reconnecting...';
+      } else if (status === 'disconnected') {
+        connectionBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20';
+        connectionDot.className = 'w-1.5 h-1.5 rounded-full bg-red-400';
+        connectionText.textContent = 'Disconnected';
+      }
+    }
+
+    // Toast notification
+    function showToast(message, duration = 5000) {
+      toastMessage.textContent = message;
+      toast.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+      setTimeout(() => toast.classList.add('hidden'), duration);
+    }
+
+    toastClose.addEventListener('click', () => toast.classList.add('hidden'));
+
+    // Helper functions
+    function formatBytes(bytes, decimals = 2) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    async function apiFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      if (authToken) {
+        options.headers['X-Admin-Token'] = authToken;
+      }
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        setAuthToken('');
+        loginModal.classList.remove('hidden');
+        showToast('Session expired. Please sign in again.');
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        showToast(err.detail || res.statusText);
+        throw new Error(err.detail || res.statusText);
+      }
+      return res.json();
+    }
+
+    // WebSocket Channel Engine
+    let ws = null;
+    let wsReconnectTimer = null;
+    let wsReconnectDelay = 1000;
+    let pollingInterval = null;
+
+    function connectWebSocket() {
+      if (!authToken) return;
+      if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+      }
+
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/api/admin/ws`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        console.error('Failed to create WebSocket instance:', e);
+        if (connectionStatus !== 'polling') {
+          updateConnectionStatus('reconnecting');
+        }
+        startHttpPollingFallback();
+        scheduleWsReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        wsReconnectDelay = 1000;
+        updateConnectionStatus('connected');
+        // Initial JSON fallback auth message in case cookie was omitted by browser
+        try {
+          ws.send(JSON.stringify({ type: 'auth', token: authToken }));
+        } catch (e) {}
+
+        // Resync current route state on reconnect
+        const currentRoute = location.hash.replace('#', '') || 'overview';
+        navigateTo(currentRoute);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleRealtimeEvent(msg);
+        } catch (err) {
+          console.error('Error handling WebSocket event:', err);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.warn('WebSocket error encountered:', err);
+      };
+
+      ws.onclose = () => {
+        console.warn(`WebSocket closed. Attempting reconnect in ${wsReconnectDelay}ms`);
+        if (connectionStatus !== 'polling') {
+          updateConnectionStatus('reconnecting');
+        }
+        startHttpPollingFallback();
+        scheduleWsReconnect();
+      };
+    }
+
+    function scheduleWsReconnect() {
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(() => {
+        wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, 30000);
+        connectWebSocket();
+      }, wsReconnectDelay);
+    }
+
+    async function doPollingTick() {
+      if (!authToken || connectionStatus === 'connected') return;
+      const route = location.hash.replace('#', '') || 'overview';
+      try {
+        await navigateTo(route, true);
+        if (connectionStatus !== 'connected') {
+          updateConnectionStatus('polling');
+        }
+      } catch (err) {
+        if (connectionStatus !== 'connected') {
+          updateConnectionStatus('disconnected');
+        }
+      }
+    }
+
+    function startHttpPollingFallback() {
+      if (pollingInterval) return;
+      doPollingTick();
+      pollingInterval = setInterval(doPollingTick, 3000);
+    }
+
+    function stopHttpPollingFallback() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    // Process incoming WS Realtime Events
+    function handleRealtimeEvent(event) {
+      if (!event || !event.type) return;
+
+      const currentRoute = location.hash.replace('#', '') || 'overview';
+
+      if (event.type === 'overview_update') {
+        renderOverviewData(event.data);
+      } else if (event.type === 'access_log') {
+        const log = event.data;
+        // Prepend to overview recent activity
+        const tbody = document.getElementById('recentActivityBody');
+        if (tbody) {
+          const emptyTr = tbody.querySelector('td[colspan="4"]');
+          if (emptyTr) tbody.innerHTML = '';
+
+          const newRow = document.createElement('tr');
+          newRow.className = 'hover:bg-slate-900/40 bg-brand-500/10 transition-colors';
+          newRow.innerHTML = `
+            <td class="py-2.5 font-semibold ${log.event_type === 'WRITE' ? 'text-emerald-400' : 'text-brand-400'}">${log.event_type}</td>
+            <td class="py-2.5">${log.bucket}</td>
+            <td class="py-2.5 font-mono text-slate-300 truncate max-w-xs">${log.key}</td>
+            <td class="py-2.5 text-slate-500">${new Date(log.timestamp).toLocaleString()}</td>
+          `;
+          tbody.insertBefore(newRow, tbody.firstChild);
+          // Limit to 15 rows
+          while (tbody.children.length > 15) {
+            tbody.removeChild(tbody.lastChild);
+          }
+        }
+
+        // Prepend to access logs view if visible
+        if (currentRoute === 'access-logs') {
+          const accessBody = document.getElementById('accessLogsTableBody');
+          if (accessBody) {
+            const emptyTr = accessBody.querySelector('td[colspan="4"]');
+            if (emptyTr) accessBody.innerHTML = '';
+
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-900/40 bg-brand-500/10 transition-colors';
+            row.innerHTML = `
+              <td class="py-2.5 font-semibold ${log.event_type === 'WRITE' ? 'text-emerald-400' : 'text-brand-400'}">${log.event_type}</td>
+              <td class="py-2.5">${log.bucket}</td>
+              <td class="py-2.5 font-mono text-slate-300 truncate max-w-md">${log.key}</td>
+              <td class="py-2.5 text-slate-500">${new Date(log.timestamp).toLocaleString()}</td>
+            `;
+            accessBody.insertBefore(row, accessBody.firstChild);
+          }
+        }
+      } else if (event.type === 'app_log') {
+        if (currentRoute === 'app-logs') {
+          const consoleEl = document.getElementById('appLogsConsole');
+          if (consoleEl) {
+            const isAtBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 50;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'hover:bg-slate-900 px-1 rounded truncate text-emerald-300/90';
+            lineDiv.textContent = event.data.line;
+            consoleEl.appendChild(lineDiv);
+            if (isAtBottom) {
+              consoleEl.scrollTop = consoleEl.scrollHeight;
+            }
+          }
+        }
+      } else if (event.type === 'hsm_task_updated' || event.type === 'hsm_status_changed') {
+        if (currentRoute === 'hsm') {
+          loadHsm();
+        }
+      } else if (event.type === 'bucket_created' || event.type === 'bucket_deleted' || event.type === 'object_deleted') {
+        if (currentRoute === 'buckets') {
+          loadBuckets();
+        } else if (currentRoute === 'overview') {
+          loadOverview();
+        }
+      } else if (event.type === 'cache_cleared') {
+        if (currentRoute === 'cache') {
+          loadCache();
+        }
+      }
+    }
+
+    // Login Handle
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.classList.add('hidden');
+      const access_key = document.getElementById('loginAccessKey').value;
+      const secret_key = document.getElementById('loginSecretKey').value;
+
+      try {
+        const data = await apiFetch('/api/admin/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_key, secret_key, password: secret_key })
+        });
+        setAuthToken(data.token);
+        loginModal.classList.add('hidden');
+        location.hash = '#overview';
+        navigateTo('overview');
+        loadOverview();
+        connectWebSocket();
+      } catch (err) {
+        loginError.textContent = err.message || 'Login failed';
+        loginError.classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      setAuthToken('');
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
+      stopHttpPollingFallback();
+      loginModal.classList.remove('hidden');
+    });
+
+    // Navigation Router
+    async function navigateTo(route, silent = false) {
+      document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-link').forEach(el => {
+        el.classList.remove('bg-slate-800/80', 'text-white');
+        el.classList.add('text-slate-400');
+      });
+
+      const targetView = document.getElementById('view-' + route);
+      const targetNav = document.querySelector(`[data-nav="${route}"]`);
+
+      if (targetView) targetView.classList.remove('hidden');
+      if (targetNav) {
+        targetNav.classList.add('bg-slate-800/80', 'text-white');
+        targetNav.classList.remove('text-slate-400');
+      }
+
+      document.getElementById('pageTitle').textContent = route.replace('-', ' ').toUpperCase();
+
+      if (window.lucide) lucide.createIcons();
+
+      // Refresh route data
+      if (route === 'overview') await loadOverview(silent);
+      else if (route === 'buckets') await loadBuckets(silent);
+      else if (route === 'tiers') await loadTiers(silent);
+      else if (route === 'backends') await loadBackends(silent);
+      else if (route === 'cache') await loadCache(silent);
+      else if (route === 'hsm') await loadHsm(silent);
+      else if (route === 'access-logs') await loadAccessLogs(silent);
+      else if (route === 'app-logs') await loadAppLogs(silent);
+      else if (route === 'security') await loadSecurity(silent);
+    }
+
+    window.addEventListener('hashchange', () => {
+      const route = location.hash.replace('#', '') || 'overview';
+      navigateTo(route);
+    });
+
+    function renderOverviewData(data) {
+      if (!data) return;
+      document.getElementById('statStorageBytes').textContent = formatBytes(data.storage_bytes);
+      document.getElementById('statObjectsCount').textContent = data.objects_count.toLocaleString();
+      document.getElementById('statBucketsCount').textContent = data.buckets_count;
+      document.getElementById('statCacheBytes').textContent = formatBytes(data.cache.current_bytes);
+      document.getElementById('statCacheEntries').textContent = `${data.cache.entries_count} entries`;
+      document.getElementById('statHsmActive').textContent = `${data.hsm.active_migrations} active`;
+      document.getElementById('statHsmMoved').textContent = `${formatBytes(data.hsm.migrated_bytes)} moved`;
+
+      // Tiers bar
+      const container = document.getElementById('tierBarsContainer');
+      if (data.tiers && data.tiers.length > 0) {
+        container.innerHTML = data.tiers.map(t => `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-slate-300 font-medium">
+              <span>Tier ${t.priority} (${t.id} / ${t.backend})</span>
+              <span>${formatBytes(t.current_size)} ${t.target_capacity ? '/ ' + formatBytes(t.target_capacity) : ''}</span>
+            </div>
+            <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+              <div class="bg-brand-500 h-full" style="width: ${t.target_capacity ? Math.min(100, (t.current_size/t.target_capacity)*100) : 5}%"></div>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        container.innerHTML = '<p class="text-xs text-slate-500 italic">No HSM tiers active</p>';
+      }
+
+      // System health status
+      if (data.system_status) {
+        const healthMap = {
+          'Operational': { cls: 'text-emerald-400', label: 'Operational' },
+          'Running': { cls: 'text-brand-400', label: 'Running' },
+          'Stopped': { cls: 'text-rose-400', label: 'Stopped' },
+          'Disabled': { cls: 'text-slate-500', label: 'Disabled' },
+          'Offline': { cls: 'text-rose-400', label: 'Offline' },
+        };
+
+        const s3Status = healthMap[data.system_status.s3_api] || healthMap['Operational'];
+        const metadataStatus = healthMap[data.system_status.metadata_db] || healthMap['Offline'];
+        const hsmStatus = healthMap[data.system_status.hsm_scheduler] || healthMap['Disabled'];
+
+        const updateHealth = (id, info) => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-current"></span> ${info.label}`;
+            el.className = `${info.cls} font-medium flex items-center gap-1.5`;
+          }
+        };
+
+        updateHealth('healthS3Status', s3Status);
+        updateHealth('healthMetadataStatus', metadataStatus);
+        updateHealth('healthHsmStatus', hsmStatus);
+
+        const hsmBadge = document.getElementById('hsmBadge');
+        if (hsmBadge) {
+          const isHsmEnabled = data.hsm && data.hsm.enabled;
+          hsmBadge.textContent = isHsmEnabled ? 'HSM Enabled' : 'HSM Disabled';
+          hsmBadge.className = isHsmEnabled
+            ? 'px-2.5 py-1 rounded-md text-[11px] font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20'
+            : 'px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20';
+        }
+      }
+
+      document.getElementById('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()} (live)`;
+    }
+
+    // Load Overview Data
+    async function loadOverview(silent = false) {
+      try {
+        const data = await apiFetch('/api/admin/overview');
+        renderOverviewData(data);
+
+        // Recent activity
+        const tbody = document.getElementById('recentActivityBody');
+        if (data.recent_activity && data.recent_activity.length > 0) {
+          tbody.innerHTML = data.recent_activity.map(a => `
+            <tr class="hover:bg-slate-900/40">
+              <td class="py-2.5 font-semibold ${a.event_type === 'WRITE' ? 'text-emerald-400' : 'text-brand-400'}">${a.event_type}</td>
+              <td class="py-2.5">${a.bucket}</td>
+              <td class="py-2.5 font-mono text-slate-300 truncate max-w-xs">${a.key}</td>
+              <td class="py-2.5 text-slate-500">${new Date(a.timestamp).toLocaleString()}</td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500">No recent activity recorded</td></tr>';
+        }
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load overview');
+        throw err;
+      }
+    }
+
+    // Load Buckets
+    async function loadBuckets(silent = false) {
+      try {
+        const buckets = await apiFetch('/api/admin/buckets');
+        const tbody = document.getElementById('bucketsTableBody');
+        if (buckets.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-500">No buckets registered yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = buckets.map(b => `
+          <tr class="hover:bg-slate-900/40">
+            <td class="p-4 font-bold text-white">${b.name}</td>
+            <td class="p-4">${b.backend}</td>
+            <td class="p-4">${b.region}</td>
+            <td class="p-4">${b.object_count}</td>
+            <td class="p-4 font-mono">${formatBytes(b.total_size)}</td>
+            <td class="p-4 text-slate-500">${new Date(b.created_at).toLocaleDateString()}</td>
+            <td class="p-4 text-right space-x-2">
+              <button onclick="viewBucketObjects('${b.name}')" class="px-2.5 py-1 bg-brand-600/20 text-brand-400 border border-brand-500/30 rounded hover:bg-brand-600/30 font-medium">Objects</button>
+              <button onclick="deleteBucket('${b.name}')" class="px-2.5 py-1 bg-rose-600/20 text-rose-400 border border-rose-500/30 rounded hover:bg-rose-600/30 font-medium">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load buckets');
+        throw err;
+      }
+    }
+
+    async function viewBucketObjects(bucketName) {
+      try {
+        const data = await apiFetch(`/api/admin/buckets/${bucketName}/objects`);
+        document.getElementById('detailBucketName').textContent = `Objects in '${bucketName}'`;
+        document.getElementById('bucketDetailSection').classList.remove('hidden');
+
+        const tbody = document.getElementById('objectsTableBody');
+        if (data.objects.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-500">Bucket is empty</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.objects.map(o => `
+          <tr class="hover:bg-slate-900/40">
+            <td class="py-2.5 font-mono text-white truncate max-w-xs">${o.key}</td>
+            <td class="py-2.5 font-mono">${formatBytes(o.size)}</td>
+            <td class="py-2.5"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">${o.current_tier}</span></td>
+            <td class="py-2.5 font-mono text-amber-400">${o.heat_score}</td>
+            <td class="py-2.5">${o.migration_state}</td>
+            <td class="py-2.5 text-slate-500">${new Date(o.last_modified).toLocaleString()}</td>
+            <td class="py-2.5 text-right">
+              <button onclick="deleteObject('${bucketName}', '${o.key}')" class="text-rose-400 hover:text-rose-300 font-medium">Delete</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function deleteBucket(name) {
+      if (!confirm(`Are you sure you want to delete bucket '${name}'?`)) return;
+      try {
+        await apiFetch(`/api/admin/buckets/${name}`, { method: 'DELETE' });
+        loadBuckets();
+      } catch (err) {
+        if (confirm(`${err.message}\nDo you want to FORCE delete bucket and ALL objects inside?`)) {
+          try {
+            await apiFetch(`/api/admin/buckets/${name}?force=true`, { method: 'DELETE' });
+            loadBuckets();
+          } catch (e) { alert(e.message); }
+        }
+      }
+    }
+
+    async function deleteObject(bucket, key) {
+      if (!confirm(`Delete object '${key}'?`)) return;
+      try {
+        await apiFetch(`/api/admin/buckets/${bucket}/objects/${encodeURIComponent(key)}`, { method: 'DELETE' });
+        viewBucketObjects(bucket);
+      } catch (err) { alert(err.message); }
+    }
+
+    document.getElementById('closeBucketDetailBtn').addEventListener('click', () => {
+      document.getElementById('bucketDetailSection').classList.add('hidden');
+    });
+
+    // Create Bucket Modal
+    const createBucketModal = document.getElementById('createBucketModal');
+    document.getElementById('openCreateBucketBtn').addEventListener('click', () => createBucketModal.classList.remove('hidden'));
+    document.getElementById('closeCreateBucketModalBtn').addEventListener('click', () => createBucketModal.classList.add('hidden'));
+
+    document.getElementById('createBucketForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('newBucketName').value;
+      const backend = document.getElementById('newBucketBackend').value;
+      const region = document.getElementById('newBucketRegion').value;
+
+      try {
+        await apiFetch('/api/admin/buckets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, backend, region })
+        });
+        createBucketModal.classList.add('hidden');
+        loadBuckets();
+      } catch (err) { alert(err.message); }
+    });
+
+    // Load Tiers
+    async function loadTiers(silent = false) {
+      try {
+        const tiers = await apiFetch('/api/admin/tiers');
+        const container = document.getElementById('tiersCardsContainer');
+        if (tiers.length === 0) {
+          container.innerHTML = '<p class="text-xs text-slate-500 italic">No storage tiers configured</p>';
+          return;
+        }
+
+        container.innerHTML = tiers.map(t => `
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h4 class="font-bold text-white text-sm">Tier ${t.priority} (${t.id})</h4>
+                <p class="text-xs text-slate-400">Backend: ${t.backend}</p>
+              </div>
+              <span class="px-2.5 py-1 rounded text-[10px] font-mono bg-slate-800 text-brand-400">P${t.priority}</span>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Current Size:</span>
+                <span class="font-mono text-white font-bold">${formatBytes(t.current_size)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Objects Count:</span>
+                <span class="text-white">${t.object_count}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Target Capacity:</span>
+                <span class="text-slate-300 font-mono">${t.target_capacity ? formatBytes(t.target_capacity) : 'Unlimited'}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">High Watermark:</span>
+                <span class="text-slate-300 font-mono">${t.high_watermark ? formatBytes(t.high_watermark) : 'N/A'}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Hard Limit:</span>
+                <span class="text-slate-300 font-mono">${t.limit ? formatBytes(t.limit) : 'Unlimited'}</span>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    // Load Backends
+    async function loadBackends(silent = false) {
+      try {
+        const backends = await apiFetch('/api/admin/backends');
+        const container = document.getElementById('backendsCardsContainer');
+        container.innerHTML = backends.map(b => `
+          <div class="bg-slate-900/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h4 class="font-bold text-white text-sm">${b.id}</h4>
+                <p class="text-xs text-slate-400">Type: ${b.type}</p>
+              </div>
+              <span class="px-2.5 py-1 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${b.status}</span>
+            </div>
+
+            <div class="text-xs font-mono text-slate-400 bg-slate-950 p-3 rounded-lg overflow-x-auto">
+              ${JSON.stringify(b.config, null, 2)}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    // Load Cache
+    async function loadCache(silent = false) {
+      try {
+        const cache = await apiFetch('/api/admin/cache');
+        document.getElementById('cacheCurrentSize').textContent = formatBytes(cache.current_size);
+        document.getElementById('cacheEntriesCount').textContent = cache.entries_count;
+        document.getElementById('cachePolicy').textContent = `Eviction Policy: ${cache.policy}`;
+        document.getElementById('cacheDirectory').textContent = cache.cache_dir;
+
+        const pct = cache.max_size_bytes ? Math.min(100, (cache.current_size / cache.max_size_bytes) * 100) : 0;
+        document.getElementById('cacheProgressBar').style.width = pct + '%';
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    document.getElementById('clearCacheBtn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to clear the entire LRU cache?')) return;
+      try {
+        await apiFetch('/api/admin/cache/clear', { method: 'POST' });
+        loadCache();
+      } catch (err) { alert(err.message); }
+    });
+
+    // Load HSM
+    async function loadHsm(silent = false) {
+      try {
+        const hsm = await apiFetch('/api/admin/hsm');
+        document.getElementById('hsmStatusText').textContent = hsm.status;
+        document.getElementById('hsmActiveCount').textContent = hsm.active_tasks_count;
+        document.getElementById('hsmSuccCount').textContent = hsm.successful_migrations_count;
+        document.getElementById('hsmMovedVolume').textContent = formatBytes(hsm.successful_migrations_bytes);
+
+        const tbody = document.getElementById('migrationHistoryTableBody');
+        if (hsm.history && hsm.history.length > 0) {
+          tbody.innerHTML = hsm.history.map(h => `
+            <tr class="hover:bg-slate-900/40">
+              <td class="py-2 font-mono">#${h.id}</td>
+              <td class="py-2 font-mono text-white truncate max-w-xs">${h.bucket}/${h.key}</td>
+              <td class="py-2">${h.from_tier}</td>
+              <td class="py-2">${h.to_tier}</td>
+              <td class="py-2"><span class="px-2 py-0.5 rounded text-[10px] ${h.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-300'}">${h.status}</span></td>
+              <td class="py-2 font-mono">${h.retry_count}</td>
+              <td class="py-2 text-slate-500">${new Date(h.created_at).toLocaleString()}</td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-500">No migration history records found</td></tr>';
+        }
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    document.getElementById('hsmTickBtn').addEventListener('click', async () => {
+      try {
+        await apiFetch('/api/admin/hsm/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'tick' })
+        });
+        alert('HSM Migration tick triggered successfully');
+        loadHsm();
+      } catch (err) { alert(err.message); }
+    });
+
+    document.getElementById('hsmPauseResumeBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('hsmPauseResumeBtn');
+      const isRunning = document.getElementById('hsmStatusText').textContent === 'Running';
+      const action = isRunning ? 'pause' : 'resume';
+      try {
+        await apiFetch('/api/admin/hsm/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        });
+        btn.textContent = isRunning ? 'Resume Scheduler' : 'Pause Scheduler';
+        btn.classList.toggle('bg-brand-600', !isRunning);
+        btn.classList.toggle('bg-brand-500', isRunning);
+        btn.classList.toggle('hover:bg-brand-500', !isRunning);
+        btn.classList.toggle('hover:bg-brand-600', isRunning);
+        loadHsm();
+      } catch (err) { alert(err.message); }
+    });
+
+    // Load Access Logs
+    async function loadAccessLogs(silent = false) {
+      try {
+        const bucket = document.getElementById('accessLogsBucketFilter').value;
+        const event_type = document.getElementById('accessLogsTypeFilter').value;
+        let url = '/api/admin/logs/access?limit=100';
+        if (bucket) url += `&bucket=${encodeURIComponent(bucket)}`;
+        if (event_type) url += `&event_type=${encodeURIComponent(event_type)}`;
+
+        const data = await apiFetch(url);
+        const tbody = document.getElementById('accessLogsTableBody');
+        if (data.logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500">No access log entries found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.logs.map(l => `
+          <tr class="hover:bg-slate-900/40">
+            <td class="py-2.5 font-semibold ${l.event_type === 'WRITE' ? 'text-emerald-400' : 'text-brand-400'}">${l.event_type}</td>
+            <td class="py-2.5">${l.bucket}</td>
+            <td class="py-2.5 font-mono text-slate-300 truncate max-w-md">${l.key}</td>
+            <td class="py-2.5 text-slate-500">${new Date(l.timestamp).toLocaleString()}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    document.getElementById('filterAccessLogsBtn').addEventListener('click', () => loadAccessLogs());
+
+    // Load App Logs
+    async function loadAppLogs(silent = false) {
+      try {
+        const search = document.getElementById('appLogsSearch').value;
+        let url = '/api/admin/logs/app?limit=200';
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+
+        const data = await apiFetch(url);
+        const consoleEl = document.getElementById('appLogsConsole');
+        if (data.logs.length === 0) {
+          consoleEl.innerHTML = '<p class="text-slate-500">No log lines matched</p>';
+          return;
+        }
+
+        consoleEl.innerHTML = data.logs.map(line => `
+          <div class="hover:bg-slate-900 px-1 rounded truncate">${line}</div>
+        `).join('');
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    document.getElementById('refreshAppLogsBtn').addEventListener('click', () => loadAppLogs());
+
+    // Load Security
+    async function loadSecurity(silent = false) {
+      try {
+        const sec = await apiFetch('/api/admin/security');
+        document.getElementById('securityAccessKey').textContent = sec.global_access_key;
+        document.getElementById('securityMessage').textContent = sec.message;
+      } catch (err) {
+        if (!silent) showToast(err.message || 'Failed to load data');
+        throw err;
+      }
+    }
+
+    // Refresh Btn
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      const route = location.hash.replace('#', '') || 'overview';
+      navigateTo(route);
+    });
+
+    // Init
+    if (!authToken) {
+      loginModal.classList.remove('hidden');
+    } else {
+      loginModal.classList.add('hidden');
+      const route = location.hash.replace('#', '') || 'overview';
+      if (!location.hash) location.hash = '#' + route;
+      navigateTo(route);
+      connectWebSocket();
+    }
+
+    // Render Lucide Icons after page fully loads
+    window.addEventListener('load', () => {
+      if (window.lucide) lucide.createIcons();
+    });
+    if (window.lucide) lucide.createIcons();
+  </script>
+</body>
+</html>

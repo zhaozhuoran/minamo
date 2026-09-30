@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import binascii
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import AsyncIterator, Dict, List, Optional, Tuple
@@ -36,6 +37,8 @@ from .errors import (
     no_such_upload,
 )
 
+logger = logging.getLogger("minamo.service")
+
 
 def _validate_bucket(bucket: str) -> None:
     if not validate_bucket_name(bucket):
@@ -43,16 +46,18 @@ def _validate_bucket(bucket: str) -> None:
 
 
 class S3Service:
-    def __init__(self, metadata: MetadataStore, storage: StorageBackend) -> None:
+    def __init__(self, metadata: MetadataStore, storage: StorageBackend, region: str = "us-east-1") -> None:
         self.metadata = metadata
         self.storage = storage
+        self.region = region
 
     # -- buckets -------------------------------------------------------------
     async def create_bucket(self, bucket: str) -> None:
         _validate_bucket(bucket)
         if self.metadata.bucket_exists(bucket):
             raise bucket_already_exists(bucket)
-        self.metadata.create_bucket(bucket, datetime.now(timezone.utc))
+        logger.debug("service: create bucket=%s region=%s", bucket, self.region)
+        self.metadata.create_bucket(bucket, datetime.now(timezone.utc), region=self.region)
         await self.storage.create_bucket(bucket)
 
     async def head_bucket(self, bucket: str) -> BucketInfo:
@@ -73,7 +78,14 @@ class S3Service:
         self.metadata.delete_bucket(bucket)
 
     async def list_buckets(self) -> List[BucketInfo]:
-        return self.metadata.list_buckets()
+        logger.debug("service: list buckets")
+        try:
+            buckets = self.metadata.list_buckets()
+            logger.debug("service: listed %d buckets", len(buckets))
+            return buckets
+        except Exception as exc:
+            logger.exception("service: failed to list buckets")
+            raise
 
     # -- objects -------------------------------------------------------------
     async def put_object(
@@ -89,10 +101,14 @@ class S3Service:
         _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
+        clean_key = key.strip("/")
+        if not clean_key:
+            raise invalid_argument("Key cannot be empty")
+        logger.debug("service: put object bucket=%s key=%s (clean=%s)", bucket, key, clean_key)
         etag = hashlib.md5(data).hexdigest()
-        size = await self.storage.put_object(bucket, key, data)
+        size = await self.storage.put_object(bucket, clean_key, data)
         info = ObjectInfo(
-            key=key,
+            key=clean_key,
             size=size,
             etag=etag,
             content_type=content_type,
@@ -108,28 +124,64 @@ class S3Service:
         _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
+        logger.debug("service: get object bucket=%s key=%s", bucket, key)
+        clean_key = key.strip("/")
         info = self.metadata.get_object(bucket, key)
+        target_key = key
+        if info is None and clean_key != key:
+            target_key = clean_key
+            info = self.metadata.get_object(bucket, target_key)
         if info is None:
+            # Fallback check for virtual directory prefix
+            prefix_check = key if key.endswith("/") else key + "/"
+            listing = self.metadata.list_objects(bucket, prefix=prefix_check, max_keys=1)
+            if listing.objects or listing.common_prefixes:
+                info = ObjectInfo(
+                    key=key,
+                    size=0,
+                    etag="d41d8cd98f00b204e9800998ecf8427e",
+                    content_type="application/x-directory",
+                    last_modified=datetime.now(timezone.utc),
+                    storage_class="STANDARD",
+                )
+                async def _empty_stream():
+                    if False:
+                        yield b""
+                return info, _empty_stream()
             raise no_such_key(key, bucket)
-        stream = self.storage.get_object(bucket, key)
+        stream = self.storage.get_object(bucket, target_key)
         return info, stream
 
     async def head_object(self, bucket: str, key: str) -> ObjectInfo:
         _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
+        clean_key = key.strip("/")
         info = self.metadata.get_object(bucket, key)
+        if info is None and clean_key != key:
+            info = self.metadata.get_object(bucket, clean_key)
         if info is None:
+            # Fallback check for virtual directory prefix
+            prefix_check = key if key.endswith("/") else key + "/"
+            listing = self.metadata.list_objects(bucket, prefix=prefix_check, max_keys=1)
+            if listing.objects or listing.common_prefixes:
+                return ObjectInfo(
+                    key=key,
+                    size=0,
+                    etag="d41d8cd98f00b204e9800998ecf8427e",
+                    content_type="application/x-directory",
+                    last_modified=datetime.now(timezone.utc),
+                    storage_class="STANDARD",
+                )
             raise no_such_key(key, bucket)
         return info
 
     async def get_object_range(
         self, bucket: str, key: str, start: int, end: int | None
-    ) -> Tuple[ObjectInfo, bytes]:
+    ) -> Tuple[ObjectInfo, bytes, int, int]:
         _validate_bucket(bucket)
         info = await self.head_object(bucket, key)
         size = info.size
-        # Negative start means a suffix range: "last N bytes".
         if start < 0:
             start = size + start
         if start < 0 or start >= size:
@@ -139,12 +191,13 @@ class S3Service:
         if end < start:
             raise invalid_range()
         data = await self.storage.read_range(bucket, key, start, end)
-        return info, data
+        return info, data, start, end
 
     async def delete_object(self, bucket: str, key: str) -> None:
         _validate_bucket(bucket)
         if not self.metadata.bucket_exists(bucket):
             raise no_such_bucket(bucket)
+        logger.debug("service: delete object bucket=%s key=%s", bucket, key)
         await self.storage.delete_object(bucket, key)
         self.metadata.delete_object(bucket, key)
 

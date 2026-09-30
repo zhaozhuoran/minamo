@@ -85,10 +85,10 @@ class CacheManager:
 
     def get(self, bucket: str, key: str) -> Optional[Path]:
         """Retrieve a file path from cache. Updates LRU access if found."""
+        path = self._get_cache_path(bucket, key)
         cache_key = (bucket, key)
         with self._lock:
             if cache_key in self.entries:
-                path = self._get_cache_path(bucket, key)
                 if path.is_file():
                     if self.policy == "LRU":
                         self.entries.move_to_end(cache_key)
@@ -136,12 +136,12 @@ class CacheManager:
 
     def delete(self, bucket: str, key: str) -> None:
         """Delete an object from cache."""
+        path = self._get_cache_path(bucket, key)
         cache_key = (bucket, key)
         with self._lock:
             if cache_key in self.entries:
                 size = self.entries.pop(cache_key)
                 self.current_size -= size
-                path = self._get_cache_path(bucket, key)
                 try:
                     if path.exists():
                         path.unlink()

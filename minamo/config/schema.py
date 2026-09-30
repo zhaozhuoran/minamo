@@ -23,6 +23,16 @@ class DataPaths(BaseModel):
     metadata_dir: str = "metadata"
     cache_dir: str = "cache"
     state_dir: str = "state"
+    logs_dir: str = "logs"
+
+
+class AdminConfig(BaseModel):
+    """Content of ``[admin]`` in ``config/app.toml``."""
+
+    enabled: bool = True
+    host: str = "0.0.0.0"
+    port: int = 8080
+    password: str = ""
 
 
 class AppConfig(BaseModel):
@@ -35,6 +45,7 @@ class AppConfig(BaseModel):
     presign_ttl: int = 3600
     data: DataPaths = DataPaths()
     max_temp_usage: int = 5368709120  # Default 5GB
+    admin: AdminConfig = AdminConfig()
 
 
 class SecretsConfig(BaseModel):
@@ -88,5 +99,7 @@ class Settings(BaseModel):
     cache_dir: Path
     state_dir: Path
     config_dir: Path
+    logs_dir: Path
 
+    admin: AdminConfig = AdminConfig()
     hsm: HsmConfig = HsmConfig()

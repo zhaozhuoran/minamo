@@ -153,9 +153,10 @@ def _parse_query_auth(query: Dict[str, str]) -> tuple[AuthContext, str]:
 
 
 def _canonical_query_string(query: Dict[str, str], exclude: set[str]) -> str:
+    exclude_lower = {e.lower() for e in exclude}
     items = []
     for key in query:
-        if key in exclude:
+        if key.lower() in exclude_lower:
             continue
         encoded_key = aws_uri_encode(key)
         values = query.getlist(key) if hasattr(query, "getlist") else [query[key]]
@@ -188,6 +189,7 @@ def verify(
     body: bytes,
     region: str | None = None,
     service: str = "s3",
+    verify_expires: bool = True,
 ) -> AuthContext:
     """Verify a SigV4 request (header or query) and return the auth context.
 
@@ -201,16 +203,38 @@ def verify(
         if is_query:
             ctx, scope = _parse_query_auth(query)
             signed_headers_list = ctx.signed_headers.split(";") if ctx.signed_headers else []
-            exclude = {"X-Amz-Signature"}
+            exclude = {"X-Amz-Signature", "x-id"}
+            exp_val = None
+            if hasattr(query, "get"):
+                exp_val = query.get("X-Amz-Expires") or query.get("x-amz-expires")
+            if verify_expires and exp_val and ctx.amz_date:
+                try:
+                    expires_sec = int(exp_val)
+                    from datetime import datetime, timezone
+                    req_time = datetime.strptime(ctx.amz_date, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    if (now - req_time).total_seconds() > expires_sec:
+                        raise ValueError("Request has expired")
+                except ValueError as ve:
+                    if "expired" in str(ve).lower():
+                        raise
         else:
             ctx, scope = _parse_authorization(headers["authorization"])
             ctx.amz_date = headers.get("x-amz-date", "")
+            if not ctx.amz_date and "date" in headers:
+                from email.utils import parsedate_to_datetime
+                try:
+                    dt = parsedate_to_datetime(headers["date"])
+                    ctx.amz_date = dt.strftime("%Y%m%dT%H%M%SZ")
+                except Exception:
+                    pass
             signed_headers_list = ctx.signed_headers.split(";")
             exclude = set()
     except KeyError as e:
         raise ValueError(f"Missing required authentication header or query parameter: {e}")
 
-    if region is not None and ctx.region != region:
+    effective_region = ctx.region
+    if region is not None and ctx.region != "auto" and ctx.region != region:
         # Region is taken from the credential scope; mismatch means forged scope.
         raise ValueError("Region mismatch")
 
@@ -241,7 +265,7 @@ def verify(
         payload_hash,
     )
     sts = _string_to_sign(ctx.amz_date, scope, cr)
-    signing_key = signature_key(secret, ctx.datestamp, ctx.region, ctx.service)
+    signing_key = signature_key(secret, ctx.datestamp, effective_region, ctx.service)
     expected = hmac.new(signing_key, sts.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, ctx.signature):
         raise ValueError("Signature mismatch")
@@ -394,7 +418,7 @@ def presign_query(
     params["X-Amz-Expires"] = str(expires)
     params["X-Amz-SignedHeaders"] = signed_headers_str
 
-    canonical_uri = aws_uri_encode(f"/{bucket}/{key}", safe="/-_.~")
+    canonical_uri = aws_uri_encode(f"/{bucket}/{key}".rstrip("/") or "/", safe="/-_.~")
     canonical_query = _canonical_query_string(params, exclude={"X-Amz-Signature"})
     header_dict = {h: (host if h == "host" else "") for h in signed_headers}
     canonical_headers, _ = _canonical_headers(header_dict)

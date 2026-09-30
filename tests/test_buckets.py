@@ -12,6 +12,14 @@ def test_create_and_head_bucket(s3):
     assert resp["ResponseMetadata"]["HTTPStatusCode"] == 200
 
 
+def test_get_bucket_location(s3):
+    name = "test-bucket-location"
+    s3.create_bucket(Bucket=name)
+    resp = s3.get_bucket_location(Bucket=name)
+    assert resp["ResponseMetadata"]["HTTPStatusCode"] == 200
+    assert resp.get("LocationConstraint") == "us-east-1"
+
+
 def test_create_existing_bucket_conflicts(s3):
     name = "test-bucket-dup"
     s3.create_bucket(Bucket=name)

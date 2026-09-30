@@ -68,6 +68,28 @@ cache_dir = "cache"
 # Subdirectory for internal state files (such as OneDrive token files).
 # Default: "state"
 state_dir = "state"
+
+# Directory for log files. Logs are rotated daily and archived as .tar.gz.
+# Default: "logs"
+logs_dir = "logs"
+
+# Admin Console Configuration
+[admin]
+# Enable or disable the Admin Console Web Interface.
+# Default: true
+enabled = true
+
+# Port for the Admin Console service (separate from S3 port).
+# Default: 8080
+port = 8080
+
+# Host binding for the Admin Console.
+# Default: "0.0.0.0"
+host = "0.0.0.0"
+
+# Optional password override for Admin Console authentication.
+# If empty, authenticates using access_key and secret_key from secrets.toml.
+password = ""
 """
 
 SECRETS_TOML = """\

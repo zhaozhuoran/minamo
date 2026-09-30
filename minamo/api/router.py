@@ -12,6 +12,7 @@ metadata concerns live behind :class:`~minamo.service.s3_service.S3Service`.
 """
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
@@ -26,11 +27,14 @@ from .responses import (
     complete_multipart_xml,
     create_bucket_xml,
     error_xml,
+    get_bucket_location_xml,
     initiate_multipart_xml,
     list_buckets_xml,
     list_objects_v2_xml,
     list_parts_xml,
 )
+
+logger = logging.getLogger("minamo.router")
 
 router = APIRouter()
 
@@ -120,14 +124,26 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
     q = request.query_params
     method = request.method
 
+    logger.debug("dispatch: method=%s url=%s bucket=%s key=%s",
+                  method, str(request.url), target.bucket, target.key)
+
     # --- service-level: list buckets ---------------------------------------
     if target.bucket is None:
         if method == "GET":
-            buckets = await service.list_buckets()
-            return Response(
-                list_buckets_xml(buckets),
-                media_type="application/xml",
-            )
+            logger.debug("dispatch: listing buckets, target.bucket=%s", target.bucket)
+            try:
+                buckets = await service.list_buckets()
+                logger.debug("dispatch: listed %d buckets", len(buckets))
+                body = list_buckets_xml(buckets)
+                logger.debug("dispatch: list_buckets_xml body length=%d", len(body))
+                logger.debug("dispatch: list_buckets_xml body=%s", body[:200])
+                return Response(
+                    body,
+                    media_type="text/xml",
+                )
+            except Exception as exc:
+                logger.exception("dispatch: failed to list buckets")
+                raise
         return _error(S3Error("MethodNotAllowed", "Method not allowed.", 405), request)
 
     bucket = target.bucket
@@ -135,6 +151,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
     # --- bucket-level operations -------------------------------------------
     if target.key is None:
         if method == "PUT":
+            logger.debug("dispatch: create bucket=%s", bucket)
             await service.create_bucket(bucket)
             return Response(
                 create_bucket_xml(),
@@ -143,20 +160,29 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
                 media_type="application/xml",
             )
         if method == "DELETE":
+            logger.debug("dispatch: delete bucket=%s", bucket)
             await service.delete_bucket(bucket)
             return Response(status_code=204)
         if method == "HEAD":
+            logger.debug("dispatch: head bucket=%s", bucket)
             await service.head_bucket(bucket)
             return Response(
                 status_code=200,
                 headers={"x-amz-bucket-region": settings.region},
             )
         if method == "GET":
+            if "location" in q or q.get("location") is not None:
+                logger.debug("dispatch: get bucket location bucket=%s", bucket)
+                await service.head_bucket(bucket)
+                body = get_bucket_location_xml(settings.region)
+                return Response(body, media_type="text/xml")
+
             prefix = q.get("prefix", "")
             delimiter = q.get("delimiter", "")
             max_keys = int(q.get("max-keys", "1000"))
             continuation = q.get("continuation-token")
             start_after = q.get("start-after", "")
+            logger.debug("dispatch: list objects bucket=%s prefix=%s", bucket, prefix)
             result = await service.list_objects_v2(
                 bucket,
                 prefix=prefix,
@@ -176,6 +202,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
     if method == "PUT":
         if q.get("uploadId"):
             part_number = int(q.get("partNumber"))
+            logger.debug("dispatch: upload part bucket=%s key=%s part=%d", bucket, key, part_number)
             etag = await service.upload_part(
                 bucket, key, q.get("uploadId"), part_number, auth.body
             )
@@ -185,6 +212,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
         if content_encoding == "aws-chunked":
             content_encoding = None
         storage_class = request.headers.get("x-amz-storage-class", "STANDARD")
+        logger.debug("dispatch: put object bucket=%s key=%s", bucket, key)
         info = await service.put_object(
             bucket,
             key,
@@ -200,6 +228,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
         if q.get("uploadId"):
             max_parts = int(q.get("max-parts", "1000"))
             marker = int(q.get("part-number-marker", "0"))
+            logger.debug("dispatch: list parts bucket=%s key=%s upload_id=%s", bucket, key, q.get("uploadId"))
             parts = await service.list_parts(
                 bucket, key, q.get("uploadId"), max_parts, marker
             )
@@ -212,12 +241,16 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
             parsed = _parse_range(range_header)
             if parsed is not None:
                 start, end = parsed
-                info, data = await service.get_object_range(bucket, key, start, end)
+                logger.debug("dispatch: get object range bucket=%s key=%s start=%d end=%d", bucket, key, start, end)
+                info, data, res_start, res_end = await service.get_object_range(
+                    bucket, key, start, end
+                )
                 headers = _object_headers(info)
-                headers["Content-Range"] = f"bytes {start}-{end}/{info.size}"
+                headers["Content-Range"] = f"bytes {res_start}-{res_end}/{info.size}"
                 headers["Content-Length"] = str(len(data))
                 headers["Accept-Ranges"] = "bytes"
                 return Response(content=data, status_code=206, headers=headers)
+        logger.debug("dispatch: get object bucket=%s key=%s", bucket, key)
         info, stream = await service.get_object(bucket, key)
         data = b"".join([chunk async for chunk in stream])
         headers = _object_headers(info)
@@ -225,6 +258,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
         return Response(content=data, headers=headers)
 
     if method == "HEAD":
+        logger.debug("dispatch: head object bucket=%s key=%s", bucket, key)
         info = await service.head_object(bucket, key)
         headers = _object_headers(info)
         headers["Accept-Ranges"] = "bytes"
@@ -232,13 +266,16 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
 
     if method == "DELETE":
         if q.get("uploadId"):
+            logger.debug("dispatch: abort multipart bucket=%s key=%s upload_id=%s", bucket, key, q.get("uploadId"))
             await service.abort_multipart_upload(bucket, key, q.get("uploadId"))
             return Response(status_code=204)
+        logger.debug("dispatch: delete object bucket=%s key=%s", bucket, key)
         await service.delete_object(bucket, key)
         return Response(status_code=204)
 
     if method == "POST":
         if q.get("uploads") is not None:
+            logger.debug("dispatch: create multipart upload bucket=%s key=%s", bucket, key)
             content_type = request.headers.get(
                 "content-type", "application/octet-stream"
             )
@@ -252,6 +289,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
             )
         if q.get("uploadId"):
             parts = _parse_complete_body(auth.body)
+            logger.debug("dispatch: complete multipart upload bucket=%s key=%s upload_id=%s", bucket, key, q.get("uploadId"))
             info = await service.complete_multipart_upload(
                 bucket, key, q.get("uploadId"), parts
             )
@@ -265,6 +303,7 @@ async def _dispatch(request: Request, auth: AuthResult = Depends(s3_auth)) -> Re
                 headers={"ETag": '"' + info.etag + '"'},
             )
 
+    logger.warning("dispatch: method not allowed: %s %s", method, request.url.path)
     return _error(S3Error("MethodNotAllowed", "Method not allowed.", 405), request)
 
 

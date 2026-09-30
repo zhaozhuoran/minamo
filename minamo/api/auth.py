@@ -9,6 +9,7 @@ storage layers remain completely unaware of it.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -18,11 +19,15 @@ from ..config import Settings
 from ..service.errors import S3Error, access_denied, signature_does_not_match
 from ..utils.signing import (
     CHUNK_ALGORITHM,
+    _parse_authorization,
+    _parse_query_auth,
     parse_chunked_body,
     verify,
     verify_chunk_signatures,
 )
 from .request import resolve_target
+
+logger = logging.getLogger("minamo.auth")
 
 
 @dataclass
@@ -43,6 +48,20 @@ def _collect_headers(request: Request) -> dict[str, str]:
     return headers
 
 
+def _extract_request_region(headers: dict[str, str], query_params: dict) -> str | None:
+    try:
+        if "authorization" in headers:
+            ctx, _ = _parse_authorization(headers["authorization"])
+            return ctx.region
+        for key in ("X-Amz-Credential", "x-amz-credential"):
+            if key in query_params:
+                ctx, _ = _parse_query_auth({k: v for k, v in query_params.items()})
+                return ctx.region
+    except Exception:
+        pass
+    return None
+
+
 async def s3_auth(request: Request) -> AuthResult:
     settings: Settings = request.app.state.settings
     request_id = uuid.uuid4().hex
@@ -55,6 +74,9 @@ async def s3_auth(request: Request) -> AuthResult:
     target = resolve_target(request, settings)
     request.state.target = target
     request.state.settings = settings
+    logger.debug("auth: method=%s url=%s target.bucket=%s target.key=%s enforce_signature=%s region=%s",
+                  request.method, str(request.url), target.bucket, target.key,
+                  settings.enforce_signature, settings.region)
 
     if settings.enforce_signature:
         try:
@@ -68,8 +90,28 @@ async def s3_auth(request: Request) -> AuthResult:
                 region=settings.region,
                 service="s3",
             )
-        except ValueError:
+            logger.debug("auth: signature verified OK, access_key=%s region=%s", ctx.access_key, ctx.region)
+        except ValueError as exc:
+            msg = str(exc)
+            if "expired" in msg.lower():
+                logger.warning("auth: request expired, access denied")
+                raise S3Error("AccessDenied", "Request has expired", 403)
+            if "Region mismatch" in msg:
+                req_region = _extract_request_region(headers, request.query_params)
+                logger.warning("auth: region mismatch - configured=%s request_credential_region=%s",
+                               settings.region, req_region)
+            else:
+                logger.warning("auth: signature verification failed: %s", msg)
             raise signature_does_not_match()
+
+        if ctx.access_key != settings.access_key:
+            logger.warning("auth: access key mismatch, expected=%s got=%s",
+                           settings.access_key, ctx.access_key)
+            raise S3Error(
+                "InvalidAccessKeyId",
+                "The AWS Access Key Id you provided does not exist in our records.",
+                403,
+            )
 
         if is_streaming:
             try:
@@ -83,6 +125,7 @@ async def s3_auth(request: Request) -> AuthResult:
                     service=ctx.service,
                 )
             except ValueError:
+                logger.warning("auth: chunk signature verification failed")
                 raise signature_does_not_match()
         elif content_sha256 and content_sha256 not in (
             "UNSIGNED-PAYLOAD",
@@ -91,17 +134,17 @@ async def s3_auth(request: Request) -> AuthResult:
             from ..utils.signing import _sha256_hex
 
             if _sha256_hex(body) != content_sha256:
+                logger.warning("auth: content sha256 mismatch")
                 raise S3Error(
                     "XAmzContentChecksumMismatch",
                     "The provided 'x-amz-content-sha256' header does not match the "
                     "computed payload hash.",
                     400,
                 )
-        # future: enforce ctx.access_key against an IAM store -> access_denied()
-        pass
     else:
         if is_streaming:
             body = parse_chunked_body(body)
+        logger.debug("auth: signature enforcement disabled")
 
     request.state.body = body
     return AuthResult(body=body, request_id=request_id)

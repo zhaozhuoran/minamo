@@ -7,7 +7,7 @@ from __future__ import annotations
 
 
 from ..metadata.models import ListObjectsResult, PartInfo, UploadInfo
-from ..utils.time import http_date
+from ..utils.time import http_date, iso8601_date
 from ..utils.xml import element
 
 
@@ -33,13 +33,26 @@ def create_bucket_xml() -> str:
     return '<?xml version="1.0" encoding="UTF-8"?><CreateBucketResult/>'
 
 
+def get_bucket_location_xml(region: str = "us-east-1") -> str:
+    region_str = region if region else "us-east-1"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+        + region_str
+        + "</LocationConstraint>"
+    )
+
+
 def list_buckets_xml(buckets) -> str:
     items = []
     for b in buckets:
+        region = b.region if b.region else "us-east-1"
         items.append(
             "<Bucket>"
             + element("Name", b.name)
-            + element("CreationDate", http_date(b.created_at))
+            + element("CreationDate", iso8601_date(b.created_at))
+            + element("BucketRegion", region)
+            + element("Region", region)
             + "</Bucket>"
         )
     inner = "".join(items)
@@ -80,7 +93,7 @@ def list_objects_v2_xml(
         contents.append(
             "<Contents>"
             + element("Key", obj.key)
-            + element("LastModified", http_date(obj.last_modified))
+            + element("LastModified", iso8601_date(obj.last_modified))
             + element("ETag", _quote_etag(obj.etag))
             + element("Size", str(obj.size))
             + element("StorageClass", obj.storage_class)
@@ -134,7 +147,7 @@ def list_parts_xml(
         body += (
             "<Part>"
             + element("PartNumber", str(p.part_number))
-            + element("LastModified", http_date(_now()))
+            + element("LastModified", iso8601_date(_now()))
             + element("ETag", _quote_etag(p.etag))
             + element("Size", str(p.size))
             + "</Part>"

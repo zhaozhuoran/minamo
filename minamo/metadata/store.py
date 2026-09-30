@@ -52,10 +52,18 @@ class MetadataStore:
                 CREATE TABLE IF NOT EXISTS buckets (
                     name TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
-                    backend TEXT NOT NULL DEFAULT 'local_disk'
+                    backend TEXT NOT NULL DEFAULT 'local_disk',
+                    region TEXT NOT NULL DEFAULT 'us-east-1'
                 )
                 """
             )
+            # Safe migration for databases created before the region column existed.
+            try:
+                self._local.execute(
+                    "ALTER TABLE buckets ADD COLUMN region TEXT NOT NULL DEFAULT 'us-east-1'"
+                )
+            except sqlite3.OperationalError:
+                pass  # column already present
             # Safe migration for databases created before the backend column existed.
             try:
                 self._local.execute(
@@ -166,11 +174,11 @@ class MetadataStore:
             self._local.commit()
 
     # -- buckets -------------------------------------------------------------
-    def create_bucket(self, name: str, created_at: datetime, backend: str = "local_disk") -> None:
+    def create_bucket(self, name: str, created_at: datetime, backend: str = "local_disk", region: str = "us-east-1") -> None:
         with self._lock:
             self._local.execute(
-                "INSERT OR REPLACE INTO buckets (name, created_at, backend) VALUES (?, ?, ?)",
-                (name, created_at.isoformat(), backend),
+                "INSERT OR REPLACE INTO buckets (name, created_at, backend, region) VALUES (?, ?, ?, ?)",
+                (name, created_at.isoformat(), backend, region),
             )
             self._local.commit()
 
@@ -182,7 +190,7 @@ class MetadataStore:
     def get_bucket(self, name: str) -> Optional[BucketInfo]:
         with self._lock:
             cur = self._local.execute(
-                "SELECT name, created_at, backend FROM buckets WHERE name = ?", (name,)
+                "SELECT name, created_at, backend, region FROM buckets WHERE name = ?", (name,)
             )
             row = cur.fetchone()
             if not row:
@@ -191,6 +199,7 @@ class MetadataStore:
                 name=row[0],
                 created_at=datetime.fromisoformat(row[1]),
                 backend=row[2],
+                region=row[3],
             )
 
     def delete_bucket(self, name: str) -> None:
@@ -202,13 +211,14 @@ class MetadataStore:
     def list_buckets(self) -> List[BucketInfo]:
         with self._lock:
             cur = self._local.execute(
-                "SELECT name, created_at, backend FROM buckets ORDER BY name"
+                "SELECT name, created_at, backend, region FROM buckets ORDER BY name"
             )
             return [
                 BucketInfo(
                     name=r[0],
                     created_at=datetime.fromisoformat(r[1]),
                     backend=r[2],
+                    region=r[3],
                 )
                 for r in cur.fetchall()
             ]
@@ -330,17 +340,19 @@ class MetadataStore:
             common_prefixes: List[str] = []
             if delimiter:
                 seen: set[str] = set()
+                filtered_objects: List[ObjectInfo] = []
+                prefix_len = len(prefix)
                 for obj in objects:
                     if obj.key.startswith(prefix):
-                        rest = obj.key[len(prefix):]
+                        rest = obj.key[prefix_len:]
                         if delimiter in rest:
-                            cp = prefix + rest.split(delimiter, 1)[0] + delimiter
-                            seen.add(cp)
+                            seen.add(prefix + rest.split(delimiter, 1)[0] + delimiter)
+                        else:
+                            filtered_objects.append(obj)
+                    else:
+                        filtered_objects.append(obj)
                 common_prefixes = sorted(seen)
-                objects = [
-                    o for o in objects
-                    if not any(o.key.startswith(cp) for cp in common_prefixes)
-                ]
+                objects = filtered_objects
 
             next_token = objects[-1].key if truncated else None
             return ListObjectsResult(
@@ -467,12 +479,29 @@ class MetadataStore:
             self._local.commit()
 
     def log_access(self, bucket: str, key: str, event_type: str) -> None:
+        ts_str = datetime.now(timezone.utc).isoformat()
         with self._lock:
             self._logs_conn.execute(
                 "INSERT INTO access_logs (bucket, key, event_type, timestamp) VALUES (?, ?, ?, ?)",
-                (bucket, key, event_type, datetime.now(timezone.utc).isoformat()),
+                (bucket, key, event_type, ts_str),
             )
             self._logs_conn.commit()
+
+        try:
+            import asyncio
+            from minamo.admin.ws import ws_manager
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                loop.create_task(
+                    ws_manager.broadcast("access_log", {
+                        "bucket": bucket,
+                        "key": key,
+                        "event_type": event_type,
+                        "timestamp": ts_str,
+                    })
+                )
+        except Exception:
+            pass
 
     def get_access_logs(self, bucket: str, key: str) -> List[Tuple[str, datetime]]:
         with self._lock:
@@ -516,8 +545,8 @@ class MetadataStore:
 
     # -- Migration Task DB helpers -------------------------------------------
     def create_migration_task(self, bucket: str, key: str, from_tier: str, to_tier: str) -> int:
+        now_str = datetime.now(timezone.utc).isoformat()
         with self._lock:
-            now_str = datetime.now(timezone.utc).isoformat()
             cursor = self._migrations_conn.execute(
                 """
                 INSERT INTO migration_tasks (bucket, key, from_tier, to_tier, status, created_at, updated_at)
@@ -526,11 +555,35 @@ class MetadataStore:
                 (bucket, key, from_tier, to_tier, now_str, now_str)
             )
             self._migrations_conn.commit()
-            return cursor.lastrowid
+            task_id = cursor.lastrowid
+
+        try:
+            import asyncio
+            from minamo.admin.ws import ws_manager
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                loop.create_task(
+                    ws_manager.broadcast("hsm_task_updated", {
+                        "id": task_id,
+                        "bucket": bucket,
+                        "key": key,
+                        "from_tier": from_tier,
+                        "to_tier": to_tier,
+                        "status": "in_flight",
+                        "error_message": None,
+                        "retry_count": 0,
+                        "created_at": now_str,
+                        "updated_at": now_str,
+                    })
+                )
+        except Exception:
+            pass
+
+        return task_id
 
     def update_migration_task(self, task_id: int, status: str, error_message: Optional[str] = None, retry_count: Optional[int] = None) -> None:
+        now_str = datetime.now(timezone.utc).isoformat()
         with self._lock:
-            now_str = datetime.now(timezone.utc).isoformat()
             if error_message is not None and retry_count is not None:
                 self._migrations_conn.execute(
                     """
@@ -568,6 +621,23 @@ class MetadataStore:
                     (status, now_str, task_id)
                 )
             self._migrations_conn.commit()
+
+        try:
+            import asyncio
+            from minamo.admin.ws import ws_manager
+            loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                loop.create_task(
+                    ws_manager.broadcast("hsm_task_updated", {
+                        "id": task_id,
+                        "status": status,
+                        "error_message": error_message,
+                        "retry_count": retry_count,
+                        "updated_at": now_str,
+                    })
+                )
+        except Exception:
+            pass
 
     def get_migration_tasks(self) -> List[Tuple[int, str, str, str, str, str, Optional[str], int, str, str]]:
         with self._lock:

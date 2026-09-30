@@ -16,6 +16,7 @@ class BucketInfo:
     name: str
     created_at: datetime
     backend: str = "local_disk"
+    region: str = "us-east-1"
 
 
 @dataclass

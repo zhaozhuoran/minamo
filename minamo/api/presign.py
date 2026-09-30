@@ -6,12 +6,13 @@ e.g. for a management client or internal use.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from ..config import Settings
 from ..utils.signing import presign_query
 from ..utils.time import amz_date
+from .auth import AuthResult, s3_auth
 
 presign_router = APIRouter()
 
@@ -48,7 +49,7 @@ def build_presigned_url(
 
 
 @presign_router.post("/presign")
-async def presign(payload: PresignRequest, request: Request) -> dict:
+async def presign(payload: PresignRequest, request: Request, auth: AuthResult = Depends(s3_auth)) -> dict:
     settings: Settings = request.app.state.settings
     url = build_presigned_url(
         str(request.base_url),

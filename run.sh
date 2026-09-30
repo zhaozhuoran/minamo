@@ -7,6 +7,7 @@
 #
 # Usage:
 #   ./run.sh                 # load .env (or warn) and start the server
+#   ./run.sh --debug         # start the server with debug logging
 #   ./run.sh --port 9000     # extra args are forwarded to `python -m minamo`
 
 set -e
